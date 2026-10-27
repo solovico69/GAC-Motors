@@ -1,0 +1,467 @@
+<!--
+  PROYECTO: Sistema de Chequeo de Inventario y Almacen - GAC Motors
+  DESARROLLO & ARQUITECTURA: Victor Solorzano
+  ASISTENCIA TECNICA: OpenCode for Obsidian & Antigravity IDE
+  ROL: Interfaz de Usuario Principal (HTML5 PWA Semantico y Responsivo)
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>GAC Motors - Control de Inventario</title>
+  
+  <!-- SEO & PWA Meta -->
+  <meta name="description" content="Aplicacion corporativa de chequeo de inventario y almacen para repuestos de GAC Motors" />
+  <meta name="theme-color" content="#b31217" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GAC Inventario" />
+  
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png" />
+  <link rel="apple-touch-icon" href="./assets/icon-192.png" />
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Estilos Principales -->
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+
+  <!-- ==========================================
+       BARRA SUPERIOR (HEADER)
+       ========================================== -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand-wrapper">
+        <img src="./assets/logo-gac.png" alt="GAC Motors Logo" class="brand-logo-img" id="brandLogo" />
+        <span class="brand-subtitle">ALMACÉN &amp; INVENTARIO</span>
+      </div>
+
+      <div class="header-actions">
+        <!-- Switch Tema Dark/Light -->
+        <button type="button" class="btn-icon" id="themeToggleBtn" title="Cambiar tema Claro/Oscuro" aria-label="Cambiar tema">
+          <span id="themeIcon">☀️</span>
+        </button>
+
+        <!-- Configuracion URL Apps Script -->
+        <button type="button" class="btn-icon" id="settingsBtn" title="Configurar conexion con Apps Script" aria-label="Configurar conexion">
+          ⚙️
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================
+       CONTENIDO PRINCIPAL
+       ========================================== -->
+  <main class="main-container">
+
+    <!-- Tarjeta de Busqueda -->
+    <section class="search-card" aria-label="Buscador de repuestos">
+      <form id="searchForm" class="search-form" onsubmit="return false;">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input 
+            type="text" 
+            id="searchArticuloInput" 
+            class="search-input" 
+            placeholder="Ingrese código de ARTICULO (ej: 215, 218...)" 
+            autocomplete="off"
+            autofocus
+          />
+        </div>
+
+        <div class="search-actions">
+          <button type="button" id="btnSearch" class="btn btn-primary">
+            <span>Buscar</span>
+          </button>
+          <button type="button" id="btnOpenNewModal" class="btn btn-secondary" title="Agregar un repuesto que no existe en el sistema">
+            <span>+ Nuevo</span>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Tarjeta de Detalles del Articulo Activo -->
+    <section class="item-card" id="itemDetailCard">
+      <!-- Encabezado de la Tarjeta -->
+      <header class="item-card-header">
+        <div class="item-title-group">
+          <span class="item-badge" id="displayArticuloBadge">ARTICULO</span>
+          <h1 class="item-header-title" id="displayArticuloTitle">Consulte un artículo para comenzar</h1>
+        </div>
+        <div class="status-indicator">
+          <span class="status-badge status-sync" id="syncStatusBadge">⚡ Listo para chequear</span>
+        </div>
+      </header>
+
+      <!-- Formulario de Edicion -->
+      <form id="itemEditForm" class="form-sections" onsubmit="return false;">
+
+        <!-- BLOQUE: EXISTENCIAS Y CONTEO FISICO -->
+        <div class="stock-highlight-box">
+          <div class="stock-field">
+            <label class="form-label">
+              <span>EXISTENCIA VIRTUAL</span>
+              <span class="badge-ro">Solo Lectura</span>
+            </label>
+            <input 
+              type="text" 
+              id="field_EXIST_VIRTUAL" 
+              class="form-control stock-input-large" 
+              readonly 
+              placeholder="0" 
+            />
+          </div>
+
+          <div class="stock-field">
+            <label class="form-label" style="color: #3fb950;">
+              <span>EXISTENCIA FÍSICA (CONTEO)</span>
+              <span class="badge-ro" style="color:#3fb950; border-color:#3fb950;">Editable</span>
+            </label>
+            <input 
+              type="number" 
+              id="field_EXIST_FISICA" 
+              class="form-control stock-input-large editable" 
+              placeholder="0" 
+              min="0"
+              step="any"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="field_UBICACION">
+              <span>UBICACIÓN EN ALMACÉN</span>
+            </label>
+            <input 
+              type="text" 
+              id="field_UBICACION" 
+              class="form-control" 
+              placeholder="Ej: Pasillo A - Estante 3" 
+            />
+          </div>
+        </div>
+
+        <!-- BLOQUE: IDENTIFICACION PRINCIPAL -->
+        <div>
+          <h2 class="section-title">📦 Identificación y Descripción</h2>
+          <div class="form-grid">
+            <div class="form-group col-full">
+              <label class="form-label" for="field_DESCRIPCION">DESCRIPCIÓN DEL REPUESTO</label>
+              <textarea id="field_DESCRIPCION" class="form-control" placeholder="Descripción detallada de la pieza..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field_N_PARTE_archivo">
+                <span>N# PARTE ARCHIVO</span>
+                <span class="badge-ro">Solo Lectura</span>
+              </label>
+              <input type="text" id="field_N_PARTE_archivo" class="form-control" readonly />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field_N_PARTE_2_descripcion">N# PARTE 2 DESCRIPCIÓN</label>
+              <input type="text" id="field_N_PARTE_2_descripcion" class="form-control" placeholder="Número de parte secundario..." />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field_CATEGORIA">CATEGORÍA</label>
+              <select id="field_CATEGORIA" class="form-control">
+                <option value="">-- Seleccione Categoría --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field_METRICA">MÉTRICA / UNIDAD</label>
+              <select id="field_METRICA" class="form-control">
+                <option value="">-- Seleccione Métrica --</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- BLOQUE: CLASIFICACION AUTOMOTRIZ EN CASCADA -->
+        <div>
+          <h2 class="section-title">🚗 Clasificación de Vehículo (Filtros en Cascada)</h2>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label" for="field_MARCA">
+                <span>MARCA</span>
+              </label>
+              <select id="field_MARCA" class="form-control">
+                <option value="">-- Seleccione Marca --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field_SERIE">
+                <span>SERIE (Dependiente de Marca)</span>
+              </label>
+              <select id="field_SERIE" class="form-control" disabled>
+                <option value="">-- Seleccione Serie --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field_MODELO">
+                <span>MODELO (Dependiente de Serie)</span>
+              </label>
+              <select id="field_MODELO" class="form-control" disabled>
+                <option value="">-- Seleccione Modelo --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field_VERSION">
+                <span>VERSIÓN (Dependiente de Modelo)</span>
+              </label>
+              <select id="field_VERSION" class="form-control" disabled>
+                <option value="">-- Seleccione Versión --</option>
+              </select>
+            </div>
+
+            <!-- Multi-Select para APLICA A -->
+            <div class="form-group col-full">
+              <label class="form-label">
+                <span>APLICA A (Selección Múltiple de Modelos/Versiones)</span>
+              </label>
+              <div class="multi-select-container">
+                <div class="tags-selected-box" id="aplicaATagsBox">
+                  <!-- Chips dinamicos aqui -->
+                </div>
+                <div class="multi-select-search-row">
+                  <select id="aplicaASelectDropdown" class="form-control">
+                    <option value="">+ Seleccionar y añadir aplicación...</option>
+                  </select>
+                  <button type="button" id="btnAddAplicaA" class="btn btn-secondary">Añadir</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BLOQUE: FOTOGRAFIAS Y SUBIDA A DRIVE -->
+        <div>
+          <h2 class="section-title">📷 Fotografías del Repuesto</h2>
+          <div class="photos-section">
+            <div class="photos-actions-bar">
+              <button type="button" id="btnCaptureCamera" class="btn btn-secondary">
+                <span>📸 Tomar Foto</span>
+              </button>
+
+              <label for="fileGalleryInput" class="btn btn-secondary" style="margin:0; cursor:pointer;">
+                <span>📁 Adjuntar Galería</span>
+              </label>
+              <input type="file" id="fileGalleryInput" accept="image/*" multiple style="display:none;" />
+            </div>
+
+            <div class="photos-grid" id="photosGrid">
+              <div class="no-photos-msg">No hay fotografías registradas para este artículo.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PIE DE TARJETA CON BOTON GUARDAR -->
+        <footer class="form-footer-actions">
+          <button type="button" id="btnSaveItem" class="btn btn-success" disabled>
+            <span>💾 GUARDAR CAMBIOS</span>
+          </button>
+        </footer>
+
+      </form>
+    </section>
+
+  </main>
+
+  <!-- ==========================================
+       MODAL: CONFIGURACION (URL APPS SCRIPT)
+       ========================================== -->
+  <div class="modal-backdrop" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+    <div class="modal-container">
+      <header class="modal-header">
+        <h3 class="modal-title" id="settingsModalTitle">⚙️ Configuración de Conexión</h3>
+        <button type="button" class="modal-close-btn" id="closeSettingsModal" aria-label="Cerrar modal">&times;</button>
+      </header>
+      <div class="modal-body">
+        <p style="font-size: 0.9rem; color: var(--text-secondary);">
+          Pegue la URL de la aplicación web generada al implementar el script en Google Apps Script. Se almacenará en este navegador.
+        </p>
+        <div class="form-group">
+          <label class="form-label" for="appsScriptUrlInput">URL de la Web App de Apps Script:</label>
+          <input 
+            type="url" 
+            id="appsScriptUrlInput" 
+            class="form-control" 
+            placeholder="https://script.google.com/macros/s/.../exec" 
+          />
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); background: var(--bg-tertiary); padding: 0.75rem; border-radius: var(--radius-sm);">
+          <strong>Carpeta Google Drive Vinculada:</strong> 14HOPxz0tFZlNAxCOv0eu7cub0qqHvpsu<br/>
+          <strong>Hoja de Google Sheets:</strong> Repuestos &amp; Base_Datos
+        </div>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" id="btnTestConnection" class="btn btn-secondary">Probar Conexión</button>
+        <button type="button" id="btnSaveSettings" class="btn btn-primary">Guardar Configuración</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: AGREGAR NUEVO ARTICULO
+       ========================================== -->
+  <div class="modal-backdrop" id="newItemModal" role="dialog" aria-modal="true" aria-labelledby="newItemModalTitle">
+    <div class="modal-container">
+      <header class="modal-header">
+        <h3 class="modal-title" id="newItemModalTitle">✨ Registrar Nuevo Repuesto</h3>
+        <button type="button" class="modal-close-btn" id="closeNewItemModal" aria-label="Cerrar modal">&times;</button>
+      </header>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="new_ARTICULO">CÓDIGO ARTÍCULO (*)</label>
+            <input type="text" id="new_ARTICULO" class="form-control" placeholder="Ej: 995" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="new_CATEGORIA">CATEGORÍA</label>
+            <select id="new_CATEGORIA" class="form-control">
+              <option value="">-- Seleccione Categoría --</option>
+            </select>
+          </div>
+
+          <div class="form-group col-full">
+            <label class="form-label" for="new_DESCRIPCION">DESCRIPCIÓN (*)</label>
+            <textarea id="new_DESCRIPCION" class="form-control" placeholder="Nombre descriptivo del repuesto"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="new_N_PARTE_2_descripcion">N# PARTE 2 DESCRIPCIÓN</label>
+            <input type="text" id="new_N_PARTE_2_descripcion" class="form-control" placeholder="Número de parte..." />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="new_UBICACION">UBICACIÓN</label>
+            <input type="text" id="new_UBICACION" class="form-control" placeholder="Pasillo / Nivel" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="new_METRICA">MÉTRICA</label>
+            <select id="new_METRICA" class="form-control">
+              <option value="">-- Seleccione Métrica --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="new_EXIST_FISICA">EXISTENCIA FÍSICA INICIAL</label>
+            <input type="number" id="new_EXIST_FISICA" class="form-control" value="0" min="0" />
+          </div>
+
+          <!-- Clasificacion nuevo articulo -->
+          <div class="form-group">
+            <label class="form-label" for="new_MARCA">MARCA</label>
+            <select id="new_MARCA" class="form-control">
+              <option value="">-- Seleccione Marca --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="new_SERIE">SERIE</label>
+            <select id="new_SERIE" class="form-control" disabled>
+              <option value="">-- Seleccione Serie --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="new_MODELO">MODELO</label>
+            <select id="new_MODELO" class="form-control" disabled>
+              <option value="">-- Seleccione Modelo --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="new_VERSION">VERSIÓN</label>
+            <select id="new_VERSION" class="form-control" disabled>
+              <option value="">-- Seleccione Versión --</option>
+            </select>
+          </div>
+
+          <!-- Fotos para el nuevo articulo con Camara y Galeria -->
+          <div class="form-group col-full">
+            <label class="form-label">FOTOGRAFÍAS PARA ESTE NUEVO ARTÍCULO</label>
+            <div class="photos-section">
+              <div class="photos-actions-bar">
+                <button type="button" id="btnCaptureCameraNewItem" class="btn btn-secondary">
+                  <span>📸 Tomar Foto</span>
+                </button>
+
+                <label for="newFileGalleryInput" class="btn btn-secondary" style="margin:0; cursor:pointer;">
+                  <span>📁 Adjuntar Galería</span>
+                </label>
+                <input type="file" id="newFileGalleryInput" accept="image/*" multiple style="display:none;" />
+              </div>
+
+              <!-- Grid de Fotos del Nuevo Articulo -->
+              <div class="photos-grid" id="newPhotosGrid">
+                <div class="no-photos-msg">No hay fotografías seleccionadas para este nuevo artículo.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" id="btnCancelNewItem" class="btn btn-secondary">Cancelar</button>
+        <button type="button" id="btnSaveNewItem" class="btn btn-primary">Registrar en Inventario</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: CAPTURA DE CAMARA EN VIVO
+       ========================================== -->
+  <div class="modal-backdrop" id="cameraModal" role="dialog" aria-modal="true" aria-labelledby="cameraModalTitle">
+    <div class="modal-container" style="max-width: 500px;">
+      <header class="modal-header">
+        <h3 class="modal-title" id="cameraModalTitle">📷 Captura de Foto</h3>
+        <button type="button" class="modal-close-btn" id="closeCameraModal" aria-label="Cerrar modal">&times;</button>
+      </header>
+      <div class="modal-body">
+        <div class="camera-view-wrapper">
+          <video id="cameraVideo" autoplay playsinline muted></video>
+          <canvas id="cameraCanvas" style="display:none;"></canvas>
+        </div>
+        <div class="camera-controls-row">
+          <button type="button" id="btnSwitchCamera" class="btn btn-secondary" title="Alternar camara trasera/frontal">🔄 Girar</button>
+          <button type="button" id="btnTakeSnap" class="btn btn-primary">📸 Capturar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: VISOR DE FOTO COMPLETA
+       ========================================== -->
+  <div class="modal-backdrop" id="photoViewerModal" role="dialog" aria-modal="true">
+    <div class="modal-container" style="max-width: 800px; background: rgba(0,0,0,0.95);">
+      <header class="modal-header" style="border-bottom:none;">
+        <span id="photoViewerTitle" style="color:#fff; font-size:0.9rem;"></span>
+        <button type="button" class="modal-close-btn" id="closePhotoViewerModal" style="color:#fff;">&times;</button>
+      </header>
+      <div class="modal-body" style="align-items:center; justify-content:center; padding:0.5rem;">
+        <img id="photoViewerImg" src="" alt="Vista previa de repuesto" style="max-width:100%; max-height:75vh; object-fit:contain; border-radius:var(--radius-sm);" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Contenedor para Alertas y Toast -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <!-- Scripts -->
+  <script src="./js/app.js"></script>
+</body>
+</html>
