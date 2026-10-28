@@ -35,12 +35,12 @@ Aplicación web corporativa, responsiva e instalable (PWA) diseñada para el che
 
 ---
 
-### 2. Conectar la Aplicación Web
+### 2. Conexión de la Aplicación Web (Ya Preconfigurada)
 
-1. Abra la aplicación en su navegador local o en la versión desplegada.
-2. Al ingresar por primera vez, se abrirá el modal de configuración ⚙️ (o haga clic en el icono ⚙️ en la barra superior).
-3. Pegue la **URL de la Web App** copiada en el paso anterior y haga clic en **Guardar Configuración**.
-4. ¡Listo! La URL queda almacenada en el `localStorage` del navegador y no requerirá volver a ingresarla.
+La aplicación ya cuenta con la URL de producción preconfigurada de fábrica en el código:
+`https://script.google.com/macros/s/AKfycbwMoaiBbM5dCNo-iwD1XzuxOCvqTAFx5hsGEuL_y71lfitdzDf1dDkNJdBeRm-TUL-z/exec`
+
+Por lo tanto, **cualquier dispositivo (celular, tablet o PC) que abra el enlace de Vercel o instale la PWA se conectará y sincronizará de forma automática e inmediata sin solicitar nada al usuario**. El botón de configuración ⚙️ permanece disponible por si en el futuro se desea cambiar la URL manualmente.
 
 ---
 

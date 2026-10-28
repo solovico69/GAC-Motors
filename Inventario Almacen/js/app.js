@@ -6,10 +6,18 @@
  */
 
 // ==========================================
+// CONFIGURACION GENERAL Y URL PERMANENTE
+// ==========================================
+// Esta URL queda fija y predeterminada en el codigo.
+// Al abrir la App en cualquier dispositivo nuevo (celular, tablet o PC),
+// se conectara y sincronizara de inmediato sin solicitar la URL.
+const PERMANENT_GAS_URL = "https://script.google.com/macros/s/AKfycbwMoaiBbM5dCNo-iwD1XzuxOCvqTAFx5hsGEuL_y71lfitdzDf1dDkNJdBeRm-TUL-z/exec";
+
+// ==========================================
 // ESTADO GLOBAL DE LA APLICACION
 // ==========================================
 const AppState = {
-  appsScriptUrl: localStorage.getItem("gac_apps_script_url") || "",
+  appsScriptUrl: localStorage.getItem("gac_apps_script_url") || PERMANENT_GAS_URL,
   theme: localStorage.getItem("gac_theme") || "dark",
   filterData: {
     categorias: [],
@@ -24,7 +32,8 @@ const AppState = {
   existingPhotos: [],
   pendingNewPhotos: [], // Array de { base64, previewUrl, index }
   mediaStream: null,
-  cameraFacingMode: "environment" // "environment" o "user"
+  cameraFacingMode: "environment", // "environment" o "user"
+  cameraTarget: "main" // "main" o "newItem"
 };
 
 // ==========================================
@@ -36,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initEventListeners();
   loadSavedSettings();
 
-  if (AppState.appsScriptUrl) {
+  if (AppState.appsScriptUrl && AppState.appsScriptUrl.trim() !== "") {
     fetchCatalogFilters();
   } else {
     showToast("Por favor configure la URL de Apps Script en ⚙️ para comenzar.", "info");
@@ -86,8 +95,8 @@ function initServiceWorker() {
 // ==========================================
 function loadSavedSettings() {
   const input = document.getElementById("appsScriptUrlInput");
-  if (input && AppState.appsScriptUrl) {
-    input.value = AppState.appsScriptUrl;
+  if (input) {
+    input.value = AppState.appsScriptUrl || PERMANENT_GAS_URL || "";
   }
 }
 
