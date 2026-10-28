@@ -507,6 +507,27 @@ function compressImageFile(file, maxDimension = 1600, quality = 0.8) {
 }
 
 // ==========================================
+// ==========================================
+// HELPERS PARA FOTOS DE GOOGLE DRIVE
+// ==========================================
+function extractDriveFileId(url) {
+  if (!url) return "";
+  const match = url.toString().match(/(?:id=|\/d\/|export=view&id=)([a-zA-Z0-9_-]{25,})/);
+  return match ? match[1] : "";
+}
+
+function formatDriveImageUrl(url) {
+  if (!url) return "";
+  const trimmed = url.toString().trim();
+  if (trimmed.startsWith("data:") || trimmed.startsWith("blob:")) return trimmed;
+  const fileId = extractDriveFileId(trimmed);
+  if (fileId) {
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+  }
+  return trimmed;
+}
+
+// ==========================================
 // GESTION DE FOTOS (RENDER, CAMARA Y GALERIA)
 // ==========================================
 function renderPhotosGrid() {
@@ -524,12 +545,20 @@ function renderPhotosGrid() {
   AppState.existingPhotos.forEach((url, idx) => {
     const card = document.createElement("div");
     card.className = "photo-card";
+    const displayUrl = formatDriveImageUrl(url);
     card.innerHTML = `
-      <img src="${url}" alt="Foto ${idx + 1}" loading="lazy" />
+      <img src="${displayUrl}" alt="Foto ${idx + 1}" loading="lazy" />
       <span class="photo-badge-idx">#${idx + 1}</span>
       <button type="button" class="photo-delete-btn" title="Eliminar foto" data-type="existing" data-idx="${idx}">&times;</button>
     `;
-    card.querySelector("img").addEventListener("click", () => openPhotoViewer(url, `Foto #${idx + 1}`));
+    const imgEl = card.querySelector("img");
+    imgEl.onerror = function () {
+      const fileId = extractDriveFileId(url);
+      if (fileId && !this.src.includes("googleusercontent")) {
+        this.src = `https://lh3.googleusercontent.com/d/${fileId}`;
+      }
+    };
+    imgEl.addEventListener("click", () => openPhotoViewer(displayUrl, `Foto #${idx + 1}`));
     grid.appendChild(card);
   });
 
@@ -632,11 +661,17 @@ async function startCameraStream() {
 
     AppState.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = AppState.mediaStream;
+    video.onloadedmetadata = () => {
+      video.play().catch((e) => console.warn("Video play:", e));
+    };
   } catch (err) {
     console.warn("No se pudo iniciar camara ideal, intentando modo estandar:", err);
     try {
       AppState.mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       video.srcObject = AppState.mediaStream;
+      video.onloadedmetadata = () => {
+        video.play().catch((e) => console.warn("Video play:", e));
+      };
     } catch (finalErr) {
       showToast("No se pudo acceder a la cámara: " + finalErr.message, "error");
       closeModal("cameraModal");
@@ -653,7 +688,10 @@ function stopCameraStream() {
 
 function takeCameraSnapshot() {
   const video = document.getElementById("cameraVideo");
-  if (!video || !video.videoWidth) return;
+  if (!video || !video.videoWidth || video.readyState < 2) {
+    showToast("Por favor espere a que la cámara inicialice el video.", "info");
+    return;
+  }
 
   const canvas = document.createElement("canvas");
   canvas.width = video.videoWidth;
@@ -744,20 +782,18 @@ async function saveCurrentItem() {
     if (result && result.success) {
       // Animacion de destello y exito
       btnSave.classList.add("save-success-animation");
-      setTimeout(() => btnSave.classList.remove("save-success-animation"), 900);
-
-      showToast("¡Inventario actualizado y fotos subidas exitosamente a Google Drive!", "success");
-
-      // Actualizar fotos existentes con las nuevas devueltas por el backend
-      if (result.fotos) {
-        AppState.existingPhotos = result.fotos.split(",").map((s) => s.trim()).filter(Boolean);
-      }
-      AppState.pendingNewPhotos = [];
-      renderPhotosGrid();
+      showToast("¡Inventario actualizado y guardado exitosamente!", "success");
 
       // Refrescar estado de sincronización
       document.getElementById("syncStatusBadge").className = "status-badge status-sync";
       document.getElementById("syncStatusBadge").textContent = "✅ Guardado";
+
+      // Limpiar formulario y enfocar buscador tras 1.2 segundos para nueva consulta
+      setTimeout(() => {
+        btnSave.classList.remove("save-success-animation");
+        resetForm();
+        showToast("Listo para consultar el siguiente artículo.", "info");
+      }, 1200);
     } else {
       showToast("Error al guardar: " + (result.error || "Desconocido"), "error");
     }
@@ -767,6 +803,57 @@ async function saveCurrentItem() {
     btnSave.disabled = false;
     btnSave.innerHTML = `<span>💾 GUARDAR CAMBIOS</span>`;
   }
+}
+
+// ==========================================
+// REINICIAR Y LIMPIAR FORMULARIO
+// ==========================================
+function resetForm() {
+  AppState.currentItem = null;
+  AppState.currentRowIndex = null;
+  AppState.formulaFields = [];
+  AppState.selectedAplicaATags = [];
+  AppState.existingPhotos = [];
+  AppState.pendingNewPhotos = [];
+
+  // Limpiar buscador y enfocar para el siguiente escaneo
+  const searchInput = document.getElementById("searchArticuloInput");
+  if (searchInput) {
+    searchInput.value = "";
+    searchInput.focus();
+  }
+
+  // Restablecer encabezado
+  document.getElementById("displayArticuloBadge").textContent = "ARTICULO";
+  document.getElementById("displayArticuloTitle").textContent = "Consulte un artículo para comenzar";
+  document.getElementById("syncStatusBadge").className = "status-badge status-sync";
+  document.getElementById("syncStatusBadge").textContent = "⚡ Listo para chequear";
+
+  // Limpiar campos de texto y numeros
+  document.getElementById("field_EXIST_VIRTUAL").value = "";
+  document.getElementById("field_EXIST_FISICA").value = "";
+  document.getElementById("field_UBICACION").value = "";
+  document.getElementById("field_DESCRIPCION").value = "";
+  document.getElementById("field_N_PARTE_archivo").value = "";
+  document.getElementById("field_N_PARTE_2_descripcion").value = "";
+  document.getElementById("field_CATEGORIA").value = "";
+  document.getElementById("field_METRICA").value = "";
+  document.getElementById("field_MARCA").value = "";
+
+  // Reset selectores en cascada
+  populateSelect(document.getElementById("field_SERIE"), []);
+  document.getElementById("field_SERIE").disabled = true;
+  populateSelect(document.getElementById("field_MODELO"), []);
+  document.getElementById("field_MODELO").disabled = true;
+  populateSelect(document.getElementById("field_VERSION"), []);
+  document.getElementById("field_VERSION").disabled = true;
+
+  // Renderizar vacios
+  renderAplicaATags();
+  renderPhotosGrid();
+
+  // Deshabilitar boton guardar hasta que se consulte un articulo
+  document.getElementById("btnSaveItem").disabled = true;
 }
 
 // ==========================================

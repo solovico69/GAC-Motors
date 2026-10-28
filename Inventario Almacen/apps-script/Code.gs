@@ -416,7 +416,7 @@ function uploadPhotosToDrive(photosArray, articulo, marca, modelo) {
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     } catch(e) {}
 
-    var directUrl = "https://drive.google.com/uc?id=" + file.getId() + "&export=view";
+    var directUrl = "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w1000";
     uploadedUrls.push(directUrl);
   }
 
