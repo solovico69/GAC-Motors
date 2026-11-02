@@ -48,7 +48,12 @@ const VentasState = {
   pollingTimer: null,
   initialSnapshotLoaded: false,
   knownSellerStatusMap: {}, // { "SOL-0001": "Pendiente" }
-  knownWarehousePendingIds: new Set() // Set de IDs "SOL-XXXX" pendientes ya conocidos
+  knownWarehousePendingIds: new Set(), // Set de IDs "SOL-XXXX" pendientes ya conocidos
+
+  // Galería activa en el Modal de Vista Ampliada
+  previewGallery: [],
+  previewIndex: 0,
+  previewTitle: ""
 };
 
 // ==========================================
@@ -403,7 +408,7 @@ function bindUIEvents() {
     fetchSolicitudes(false, true);
   });
 
-  // Modal Vista Previa de Imagen
+  // Modal Vista Previa de Imagen / Galería
   document.getElementById("btnCloseImagePreview")?.addEventListener("click", () => {
     document.getElementById("imagePreviewModal")?.classList.add("hidden");
   });
@@ -411,6 +416,12 @@ function bindUIEvents() {
     if (e.target.id === "imagePreviewModal") {
       document.getElementById("imagePreviewModal")?.classList.add("hidden");
     }
+  });
+  document.getElementById("btnPrevPreviewImg")?.addEventListener("click", () => {
+    stepPreviewGallery(-1);
+  });
+  document.getElementById("btnNextPreviewImg")?.addEventListener("click", () => {
+    stepPreviewGallery(1);
   });
 
   // Modal Configuración URL
@@ -687,6 +698,70 @@ function applyMultiFieldCatalogFilter() {
   renderCatalogGrid();
 }
 
+// ==========================================
+// HELPERS PARA FOTOS DE GOOGLE DRIVE Y GALERÍA
+// ==========================================
+function extractDriveFileId(url) {
+  if (!url) return "";
+  const str = url.toString().trim();
+  const match =
+    str.match(/(?:id=|\/d\/|export=view&id=|thumbnail\?id=)([a-zA-Z0-9_-]{20,})/) ||
+    str.match(/^([a-zA-Z0-9_-]{25,45})$/);
+  return match ? match[1] : "";
+}
+
+function formatDriveImageUrl(url) {
+  if (!url) return "";
+  const trimmed = url.toString().trim();
+  if (trimmed.startsWith("data:") || trimmed.startsWith("blob:")) return trimmed;
+  const fileId = extractDriveFileId(trimmed);
+  if (fileId) {
+    return `https://lh3.googleusercontent.com/d/${fileId}=w1000`;
+  }
+  return trimmed;
+}
+
+function getItemPhotoList(item) {
+  let rawList = [];
+  if (Array.isArray(item.Fotos_Galeria) && item.Fotos_Galeria.length > 0) {
+    rawList = item.Fotos_Galeria;
+  } else if (item.Imagen_URL) {
+    rawList = item.Imagen_URL.toString().split(",");
+  }
+  return rawList
+    .map((u) => u.toString().trim())
+    .filter(Boolean);
+}
+
+/**
+ * Fallback en cascada si Google Drive bloquea un endpoint de imagen:
+ * 1) lh3.googleusercontent.com/d/{id}=w1000
+ * 2) drive.google.com/thumbnail?id={id}&sz=w1000
+ * 3) lh3.googleusercontent.com/d/{id}
+ * 4) Placeholder visual limpio de GAC Motors
+ */
+window.handleDriveImgError = function (imgEl, rawUrl) {
+  if (!imgEl) return;
+  const fileId = extractDriveFileId(rawUrl || imgEl.src);
+  const step = parseInt(imgEl.getAttribute("data-fallback-step") || "0", 10);
+
+  if (fileId && step === 0) {
+    imgEl.setAttribute("data-fallback-step", "1");
+    imgEl.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+    return;
+  }
+  if (fileId && step === 1) {
+    imgEl.setAttribute("data-fallback-step", "2");
+    imgEl.src = `https://lh3.googleusercontent.com/d/${fileId}`;
+    return;
+  }
+
+  // Fallback final: insignia limpia con buen contraste
+  imgEl.onerror = null;
+  imgEl.src = "./assets/logo-gac.png";
+  imgEl.className = "h-12 w-auto object-contain bg-white/90 px-3 py-1.5 rounded-xl shadow";
+};
+
 function renderCatalogGrid() {
   const grid = document.getElementById("catalogGrid");
   const countEl = document.getElementById("catalogResultCount");
@@ -719,9 +794,15 @@ function renderCatalogGrid() {
       const aplica = escapeHtml(item.Aplica_A || "");
       const ubicacion = escapeHtml(item.Ubicacion_Almacen || "SIN UBICACIÓN");
       const stock = Number(item.Stock) || 0;
-      const imgUrl = item.Imagen_URL ? escapeHtml(item.Imagen_URL) : "";
 
-      const inCartItem = VentasState.cart.find((c) => c.SKU_Articulo === (item.Codigo || item.SKU_Articulo));
+      const photoList = getItemPhotoList(item);
+      const rawMainUrl = photoList.length > 0 ? photoList[0] : "";
+      const displayImgUrl = rawMainUrl ? escapeHtml(formatDriveImageUrl(rawMainUrl)) : "";
+      const escapedRawUrl = escapeHtml(rawMainUrl);
+
+      const inCartItem = VentasState.cart.find(
+        (c) => String(c.SKU_Articulo) === String(item.Codigo || item.SKU_Articulo)
+      );
       const inCartQty = inCartItem ? inCartItem.Cantidad : 0;
 
       const stockBadgeClass =
@@ -733,21 +814,24 @@ function renderCatalogGrid() {
         <article class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg transition">
           <div>
             <!-- Cabecera: Imagen + Stock + SKU -->
-            <div class="relative h-44 bg-slate-950 flex items-center justify-center overflow-hidden border-b border-slate-800/80">
+            <div class="relative h-48 bg-slate-950 flex items-center justify-center overflow-hidden border-b border-slate-800/80">
               ${
-                imgUrl
+                displayImgUrl
                   ? `<img
-                      src="${imgUrl}"
+                      src="${displayImgUrl}"
                       alt="${desc}"
                       loading="lazy"
-                      data-preview-url="${imgUrl}"
-                      data-preview-title="${desc}"
-                      class="btn-preview-img w-full h-full object-cover cursor-zoom-in hover:scale-105 transition duration-300"
-                      onerror="this.onerror=null;this.src='./assets/logo-gac.png';this.className='h-14 w-auto object-contain opacity-40';"
+                      referrerpolicy="no-referrer"
+                      data-preview-sku="${sku}"
+                      data-fallback-step="0"
+                      class="btn-preview-img w-full h-full object-contain bg-slate-950 p-1 cursor-zoom-in hover:scale-105 transition duration-300"
+                      onerror="window.handleDriveImgError(this, '${escapedRawUrl}')"
                     />`
-                  : `<div class="flex flex-col items-center justify-center text-slate-600">
-                      <img src="./assets/logo-gac.png" alt="GAC" class="h-10 w-auto object-contain opacity-30 mb-1" />
-                      <span class="text-[11px] font-semibold">Sin fotografía</span>
+                  : `<div class="flex flex-col items-center justify-center text-slate-400">
+                      <div class="bg-white/90 px-3 py-1.5 rounded-xl mb-1.5 shadow">
+                        <img src="./assets/logo-gac.png" alt="GAC" class="h-6 w-auto object-contain" />
+                      </div>
+                      <span class="text-[11px] font-semibold text-slate-500">Sin fotografía</span>
                     </div>`
               }
 
@@ -760,6 +844,18 @@ function renderCatalogGrid() {
               <span class="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg border backdrop-blur text-xs font-black ${stockBadgeClass}">
                 Stock: ${stock}
               </span>
+
+              ${
+                photoList.length > 0
+                  ? `<button
+                      type="button"
+                      data-preview-sku="${sku}"
+                      class="btn-preview-img absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-slate-950/90 hover:bg-gac-red border border-slate-700 text-[11px] font-extrabold text-white shadow transition"
+                    >
+                      🔍 Ver ${photoList.length > 1 ? `(${photoList.length} fotos)` : "foto"}
+                    </button>`
+                  : ""
+              }
             </div>
 
             <!-- Cuerpo de la Tarjeta -->
@@ -869,24 +965,112 @@ function renderCatalogGrid() {
     });
   });
 
-  grid.querySelectorAll(".btn-preview-img").forEach((img) => {
-    img.addEventListener("click", () => {
-      const url = img.getAttribute("data-preview-url");
-      const title = img.getAttribute("data-preview-title");
-      openImagePreview(url, title);
+  grid.querySelectorAll(".btn-preview-img").forEach((el) => {
+    el.addEventListener("click", () => {
+      const sku = el.getAttribute("data-preview-sku");
+      openItemGalleryModal(sku);
     });
   });
 }
 
-function openImagePreview(url, title) {
-  const modal = document.getElementById("imagePreviewModal");
+function openItemGalleryModal(sku) {
+  const item = VentasState.catalog.find(
+    (it) => String(it.Codigo || it.SKU_Articulo) === String(sku)
+  );
+  if (!item) return;
+
+  const photoList = getItemPhotoList(item);
+  if (photoList.length === 0) {
+    showToast("Este repuesto no tiene fotografías registradas.", "info");
+    return;
+  }
+
+  VentasState.previewGallery = photoList;
+  VentasState.previewIndex = 0;
+  VentasState.previewTitle = `${item.Descripcion || "Repuesto"} (SKU: ${item.Codigo || item.SKU_Articulo})`;
+
+  renderActivePreviewModal();
+  document.getElementById("imagePreviewModal")?.classList.remove("hidden");
+}
+
+function stepPreviewGallery(delta) {
+  const total = VentasState.previewGallery.length;
+  if (total <= 1) return;
+  VentasState.previewIndex = (VentasState.previewIndex + delta + total) % total;
+  renderActivePreviewModal();
+}
+
+function renderActivePreviewModal() {
   const imgEl = document.getElementById("imagePreviewElement");
   const titleEl = document.getElementById("imagePreviewTitle");
-  if (!modal || !imgEl) return;
+  const counterEl = document.getElementById("imagePreviewCounter");
+  const btnPrev = document.getElementById("btnPrevPreviewImg");
+  const btnNext = document.getElementById("btnNextPreviewImg");
+  const thumbsBox = document.getElementById("imagePreviewThumbs");
 
-  imgEl.src = url;
-  if (titleEl) titleEl.textContent = title || "Vista del Repuesto";
-  modal.classList.remove("hidden");
+  if (!imgEl) return;
+
+  const total = VentasState.previewGallery.length;
+  const rawUrl = VentasState.previewGallery[VentasState.previewIndex] || "";
+  const formattedUrl = formatDriveImageUrl(rawUrl);
+
+  if (titleEl) titleEl.textContent = VentasState.previewTitle;
+  if (counterEl) {
+    counterEl.textContent = `Fotografía ${VentasState.previewIndex + 1} de ${total}`;
+  }
+
+  imgEl.setAttribute("data-fallback-step", "0");
+  imgEl.className = "max-h-[64vh] w-auto object-contain rounded-xl transition";
+  imgEl.onerror = function () {
+    window.handleDriveImgError(this, rawUrl);
+  };
+  imgEl.src = formattedUrl;
+
+  if (btnPrev && btnNext) {
+    const showNav = total > 1;
+    btnPrev.classList.toggle("hidden", !showNav);
+    btnNext.classList.toggle("hidden", !showNav);
+  }
+
+  if (thumbsBox) {
+    if (total > 1) {
+      thumbsBox.classList.remove("hidden");
+      thumbsBox.innerHTML = VentasState.previewGallery
+        .map((u, idx) => {
+          const thumbUrl = escapeHtml(formatDriveImageUrl(u));
+          const activeClass =
+            idx === VentasState.previewIndex
+              ? "ring-2 ring-red-500 opacity-100 scale-105"
+              : "opacity-60 hover:opacity-100";
+          return `
+            <button
+              type="button"
+              data-thumb-idx="${idx}"
+              class="w-14 h-14 rounded-xl overflow-hidden bg-slate-950 border border-slate-700 shrink-0 transition ${activeClass}"
+            >
+              <img
+                src="${thumbUrl}"
+                alt="Miniatura ${idx + 1}"
+                referrerpolicy="no-referrer"
+                class="w-full h-full object-cover"
+                onerror="window.handleDriveImgError(this, '${escapeHtml(u)}')"
+              />
+            </button>
+          `;
+        })
+        .join("");
+
+      thumbsBox.querySelectorAll("[data-thumb-idx]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          VentasState.previewIndex = parseInt(btn.getAttribute("data-thumb-idx"), 10) || 0;
+          renderActivePreviewModal();
+        });
+      });
+    } else {
+      thumbsBox.classList.add("hidden");
+      thumbsBox.innerHTML = "";
+    }
+  }
 }
 
 // ==========================================
