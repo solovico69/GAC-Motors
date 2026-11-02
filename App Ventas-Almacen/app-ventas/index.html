@@ -1,0 +1,643 @@
+<!--
+  PROYECTO: Mostrador Digital Ventas-Almacén - GAC Motors
+  DESARROLLO & ARQUITECTURA: Victor Solorzano
+  ASISTENCIA TÉCNICA: OpenCode for Obsidian & Antigravity IDE
+  ROL: Interfaz Principal PWA (Selector de Rol, Catálogo Ventas, Carrito Ágil y Tablero Almacén)
+-->
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>GAC Motors - Mostrador Digital Ventas-Almacén</title>
+
+  <!-- SEO & PWA Meta -->
+  <meta name="description" content="Mostrador Digital en tiempo real para solicitudes de repuestos entre Ventas y Almacén - GAC Motors" />
+  <meta name="theme-color" content="#b31217" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GAC Ventas-Almacén" />
+
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png" />
+  <link rel="apple-touch-icon" href="./assets/icon-192.png" />
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            gac: {
+              red: "#b31217",
+              redHover: "#d31920",
+              dark: "#0d1117",
+              card: "#161b22",
+              border: "#30363d"
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Estilos Complementarios -->
+  <link rel="stylesheet" href="./css/ventas.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-gac-red selection:text-white">
+
+  <!-- ==========================================
+       BANNER FLOTANTE DE ALERTAS EN VIVO (VENTAS / ALMACÉN)
+       ========================================== -->
+  <div
+    id="liveAlertBanner"
+    class="fixed top-3 left-1/2 -translate-x-1/2 z-[100] w-[95%] max-w-2xl hidden"
+    role="alert"
+    aria-live="assertive"
+  >
+    <div
+      id="liveAlertInner"
+      class="flex items-start justify-between gap-3 px-4 py-3.5 rounded-2xl shadow-2xl border backdrop-blur-md"
+    >
+      <div class="flex items-start gap-3">
+        <span id="liveAlertIcon" class="text-2xl leading-none mt-0.5">🔔</span>
+        <div>
+          <p id="liveAlertTitle" class="font-extrabold text-sm sm:text-base tracking-tight"></p>
+          <p id="liveAlertSubtitle" class="text-xs sm:text-sm opacity-90 mt-0.5"></p>
+        </div>
+      </div>
+      <button
+        type="button"
+        id="btnCloseLiveAlert"
+        class="shrink-0 px-2.5 py-1 rounded-lg bg-black/25 hover:bg-black/40 text-xs font-bold uppercase tracking-wider transition"
+      >
+        Cerrar ✕
+      </button>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       BARRA SUPERIOR CORPORATIVA (HEADER)
+       ========================================== -->
+  <header class="sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-800 shadow-lg">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2">
+      <!-- Logo Corporativo GAC Motors -->
+      <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+        <div class="bg-white px-2.5 py-1 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
+          <img
+            src="./assets/logo-gac.png"
+            alt="GAC Motors Logo"
+            class="h-6 sm:h-7 w-auto object-contain"
+          />
+        </div>
+        <div class="truncate">
+          <span class="block text-[10px] sm:text-xs font-extrabold uppercase tracking-widest text-red-500">
+            MOSTRADOR DIGITAL
+          </span>
+          <h1 class="text-xs sm:text-sm font-bold text-slate-100 truncate">
+            Ventas &amp; Almacén
+          </h1>
+        </div>
+      </div>
+
+      <!-- Indicadores de Usuario Activo y Acciones -->
+      <div class="flex items-center gap-1.5 sm:gap-2.5">
+        <!-- Badge de Rol y Usuario Activo -->
+        <div id="activeSessionBadge" class="hidden items-center gap-2 bg-slate-800/90 border border-slate-700 px-2.5 py-1.5 rounded-xl">
+          <span id="activeRoleBadge" class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-red-600 text-white">
+            ROL
+          </span>
+          <span id="activeUserName" class="text-xs sm:text-sm font-bold text-slate-100 max-w-[110px] sm:max-w-[180px] truncate">
+            Usuario
+          </span>
+          <button
+            type="button"
+            id="btnSwitchUser"
+            title="Cambiar de Rol o Usuario"
+            class="text-xs text-slate-400 hover:text-white ml-1 px-1.5 py-0.5 rounded bg-slate-700/60 hover:bg-slate-700 transition"
+          >
+            Cambiar
+          </button>
+        </div>
+
+        <!-- Botón Instalar PWA (aparece cuando el navegador lo permite) -->
+        <button
+          type="button"
+          id="btnInstallPwa"
+          class="hidden items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow transition"
+          title="Instalar Aplicación en este dispositivo"
+        >
+          <span>📲</span>
+          <span class="hidden sm:inline">Instalar App</span>
+        </button>
+
+        <!-- Botón Sonido Web Audio -->
+        <button
+          type="button"
+          id="btnToggleSound"
+          class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition text-sm"
+          title="Probar / Activar alertas de sonido"
+        >
+          <span id="soundStatusIcon">🔊</span>
+        </button>
+
+        <!-- Botón Configuración API -->
+        <button
+          type="button"
+          id="btnOpenSettings"
+          class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition text-sm"
+          title="Configuración de Conexión Google Apps Script"
+        >
+          ⚙️
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================
+       VISTA A: SELECTOR INICIAL DE ROL Y USUARIO
+       ========================================== -->
+  <section
+    id="roleSelectionView"
+    class="flex-1 flex items-center justify-center p-4 sm:p-6"
+  >
+    <div class="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8">
+      <div class="flex flex-col items-center text-center mb-6">
+        <div class="bg-white px-4 py-2 rounded-xl shadow mb-4">
+          <img src="./assets/logo-gac.png" alt="GAC Motors" class="h-9 w-auto object-contain" />
+        </div>
+        <span class="text-xs font-extrabold uppercase tracking-widest text-red-500">
+          SINCRONIZACIÓN EN TIEMPO REAL
+        </span>
+        <h2 class="text-2xl sm:text-3xl font-black text-white mt-1">
+          ¿Eres Vendedor o Almacenista?
+        </h2>
+        <p class="text-xs sm:text-sm text-slate-400 mt-1.5">
+          Selecciona tu perfil y tu nombre para ingresar directo sin clave
+        </p>
+      </div>
+
+      <!-- Botones Grandes de Selección de Rol -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-6">
+        <button
+          type="button"
+          id="btnSelectRoleVendedor"
+          class="group relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-slate-700 bg-slate-800/60 hover:border-red-500 hover:bg-slate-800 transition text-center"
+        >
+          <span class="text-4xl mb-2 group-hover:scale-110 transition">💼</span>
+          <span class="text-lg font-extrabold text-white">Soy Vendedor</span>
+          <span class="text-xs text-slate-400 mt-1">Buscar repuestos y solicitar a almacén</span>
+        </button>
+
+        <button
+          type="button"
+          id="btnSelectRoleAlmacenista"
+          class="group relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-slate-700 bg-slate-800/60 hover:border-amber-500 hover:bg-slate-800 transition text-center"
+        >
+          <span class="text-4xl mb-2 group-hover:scale-110 transition">📦</span>
+          <span class="text-lg font-extrabold text-white">Soy Almacenista</span>
+          <span class="text-xs text-slate-400 mt-1">Tablero de recolección y despacho</span>
+        </button>
+      </div>
+
+      <!-- Selector Desplegable Dinámico de Nombre -->
+      <div id="userDropdownContainer" class="hidden space-y-4 pt-2 border-t border-slate-800">
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="userSelectDropdown" id="userSelectLabel" class="block text-xs font-extrabold uppercase tracking-wider text-slate-300">
+              Selecciona tu nombre (Base_Datos)
+            </label>
+            <button
+              type="button"
+              id="btnReloadUsers"
+              class="text-xs text-red-400 hover:text-red-300 font-semibold flex items-center gap-1"
+            >
+              🔄 Recargar lista
+            </button>
+          </div>
+          <select
+            id="userSelectDropdown"
+            class="w-full px-4 py-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-semibold text-base focus:outline-none focus:border-red-500 transition"
+          >
+            <option value="">-- Selecciona tu nombre --</option>
+          </select>
+          <p id="usersLoadingHint" class="text-xs text-slate-400 mt-1.5"></p>
+        </div>
+
+        <button
+          type="button"
+          id="btnEnterApp"
+          disabled
+          class="w-full py-4 rounded-xl bg-gac-red hover:bg-gac-redHover disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-base uppercase tracking-wider shadow-lg shadow-red-950/50 transition"
+        >
+          Ingresar al Mostrador Digital →
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================
+       VISTA B: MÓDULO DE VENTAS
+       ========================================== -->
+  <main id="ventasModuleView" class="hidden flex-1 flex flex-col max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 pb-28">
+    
+    <!-- Navegación de Pestañas Ventas: Catálogo vs Mis Solicitudes -->
+    <div class="flex items-center justify-between gap-2 mb-4 bg-slate-900 p-1.5 rounded-2xl border border-slate-800">
+      <div class="flex items-center gap-1.5 flex-1">
+        <button
+          type="button"
+          id="tabVentasCatalogo"
+          class="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition bg-gac-red text-white shadow"
+        >
+          🔍 Catálogo de Repuestos
+        </button>
+        <button
+          type="button"
+          id="tabVentasMisSolicitudes"
+          class="relative flex-1 sm:flex-initial px-4 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition text-slate-300 hover:text-white hover:bg-slate-800"
+        >
+          📋 Mis Solicitudes
+          <span
+            id="badgeMisSolicitudesCount"
+            class="ml-1.5 px-2 py-0.5 text-[11px] rounded-full bg-slate-700 text-slate-200 font-black"
+          >0</span>
+        </button>
+      </div>
+
+      <!-- Estado de Sincronización & Botón Refrescar -->
+      <div class="hidden md:flex items-center gap-2 pr-2">
+        <span id="ventasPollingIndicator" class="text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          En vivo (30s)
+        </span>
+        <button
+          type="button"
+          id="btnRefreshCatalog"
+          class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 transition"
+        >
+          🔄 Actualizar
+        </button>
+      </div>
+    </div>
+
+    <!-- SUB-VISTA B1: CATÁLOGO Y BUSCADOR INTELIGENTE MULTI-CAMPO -->
+    <div id="ventasCatalogoSection" class="space-y-4">
+      <!-- Barra Buscador Inteligente Multi-Campo -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-lg">
+        <div class="flex flex-col sm:flex-row gap-2.5">
+          <div class="relative flex-1">
+            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg">🔍</span>
+            <input
+              type="search"
+              id="multiSearchInput"
+              autocomplete="off"
+              placeholder='Busca por Descripción, Marca, Modelo, Aplica A o Código (ej: "Filtro GS3", "Valvoline", "Pastilla DFSK", "GS4")...'
+              class="w-full pl-11 pr-10 py-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 text-sm sm:text-base font-medium focus:outline-none focus:border-red-500 transition"
+            />
+            <button
+              type="button"
+              id="btnClearSearch"
+              class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-sm font-bold px-1.5 py-0.5 rounded bg-slate-800"
+              title="Limpiar búsqueda"
+            >
+              ✕
+            </button>
+          </div>
+
+          <!-- Filtro rápido solo con stock -->
+          <div class="flex items-center justify-between sm:justify-start gap-2">
+            <label class="flex items-center gap-2 px-3.5 py-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer select-none text-xs sm:text-sm font-semibold text-slate-300">
+              <input type="checkbox" id="chkOnlyStock" class="accent-red-600 w-4 h-4 rounded" />
+              <span>Solo con Stock</span>
+            </label>
+
+            <button
+              type="button"
+              id="btnRefreshCatalogMobile"
+              class="md:hidden px-3.5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700"
+              title="Actualizar catálogo"
+            >
+              🔄
+            </button>
+          </div>
+        </div>
+
+        <!-- Contador de resultados y chips rápidos -->
+        <div class="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2.5 border-t border-slate-800/80 text-xs text-slate-400">
+          <div>
+            Mostrando <strong id="catalogResultCount" class="text-white font-extrabold">0</strong> repuestos disponibles
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-[11px] text-slate-500">Filtros rápidos:</span>
+            <button type="button" data-quick-filter="GS3" class="quick-filter-chip px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition">GS3</button>
+            <button type="button" data-quick-filter="GS4" class="quick-filter-chip px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition">GS4</button>
+            <button type="button" data-quick-filter="GS8" class="quick-filter-chip px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition">GS8</button>
+            <button type="button" data-quick-filter="EMZOOM" class="quick-filter-chip px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition">EMZOOM</button>
+            <button type="button" data-quick-filter="DFSK" class="quick-filter-chip px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition">DFSK</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grid de Tarjetas de Repuesto -->
+      <div
+        id="catalogGrid"
+        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+      >
+        <!-- Renderizado dinámicamente por ventas.js -->
+      </div>
+    </div>
+
+    <!-- SUB-VISTA B2: MIS SOLICITUDES (CON ALERTAS EN VIVO) -->
+    <div id="ventasMisSolicitudesSection" class="hidden space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <div>
+          <h2 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+            <span>📡 Seguimiento de Mis Solicitudes en Vivo</span>
+          </h2>
+          <p class="text-xs text-slate-400">
+            Actualización automática cada 30 segundos. Recibirás una alerta sonora y visual apenas Almacén responda.
+          </p>
+        </div>
+        <button
+          type="button"
+          id="btnRefreshMisSolicitudes"
+          class="self-start sm:self-auto px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-white transition"
+        >
+          🔄 Consultar Ahora
+        </button>
+      </div>
+
+      <div id="misSolicitudesList" class="space-y-3">
+        <!-- Renderizado dinámicamente -->
+      </div>
+    </div>
+  </main>
+
+  <!-- ==========================================
+       BARRA FLOTANTE INFERIOR Y DRAWER DEL CARRITO ULTRA-ÁGIL (VENTAS)
+       ========================================== -->
+  <div
+    id="cartFloatingBar"
+    class="hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 p-3 shadow-2xl"
+  >
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="relative flex items-center justify-center w-11 h-11 rounded-xl bg-red-600/20 border border-red-500/40 text-red-400 font-black text-lg">
+          🛒
+          <span
+            id="cartCountBubble"
+            class="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-gac-red text-white text-xs font-black flex items-center justify-center shadow"
+          >0</span>
+        </div>
+        <div>
+          <p class="text-xs sm:text-sm font-extrabold text-white">
+            Pedido Actual (<span id="cartTotalItemsText">0</span> / 20 máx.)
+          </p>
+          <p class="text-[11px] text-slate-400">
+            Sin datos de cliente ni orden • Envío directo a mostrador
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        id="btnOpenCartDrawer"
+        class="px-5 py-3 rounded-xl bg-gac-red hover:bg-gac-redHover text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg transition"
+      >
+        Ver Carrito / Enviar →
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL / DRAWER DEL CARRITO ULTRA-ÁGIL -->
+  <div
+    id="cartDrawerModal"
+    class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+  >
+    <div class="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+      <!-- Header Carrito -->
+      <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <span class="text-[10px] font-black uppercase tracking-widest text-red-500">
+            CARRITO ULTRA-ÁGIL (MÁX. 20 ARTÍCULOS)
+          </span>
+          <h3 class="text-lg font-black text-white">
+            Confirmar Solicitud a Almacén
+          </h3>
+        </div>
+        <button
+          type="button"
+          id="btnCloseCartDrawer"
+          class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- Lista de Artículos en el Carrito -->
+      <div id="cartItemsContainer" class="flex-1 overflow-y-auto p-4 space-y-2.5">
+        <!-- Items del carrito -->
+      </div>
+
+      <!-- Footer: Selector de Prioridad + Botón Enviar -->
+      <div class="p-4 sm:p-5 bg-slate-950 border-t border-slate-800 space-y-4">
+        <div>
+          <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-2">
+            Nivel de Prioridad del Pedido
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Prioridad Normal (Azul) -->
+            <button
+              type="button"
+              id="btnPriorityNormal"
+              class="py-3 px-4 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider border-2 transition flex items-center justify-center gap-2 bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-950/50"
+            >
+              <span>🔵</span>
+              <span>Normal</span>
+            </button>
+
+            <!-- Prioridad Urgente (Rojo) -->
+            <button
+              type="button"
+              id="btnPriorityUrgente"
+              class="py-3 px-4 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider border-2 transition flex items-center justify-center gap-2 bg-slate-900 border-slate-700 text-slate-300 hover:border-red-500"
+            >
+              <span>🚨</span>
+              <span>Urgente</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2.5">
+          <button
+            type="button"
+            id="btnClearCart"
+            class="px-4 py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider transition"
+          >
+            Vaciar
+          </button>
+          <button
+            type="button"
+            id="btnSubmitSolicitud"
+            class="flex-1 py-3.5 px-5 rounded-xl bg-gac-red hover:bg-gac-redHover text-white font-black text-sm sm:text-base uppercase tracking-wider shadow-lg shadow-red-950/60 transition flex items-center justify-center gap-2"
+          >
+            <span>🚀 Enviar Solicitud</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       VISTA C: MÓDULO DE ALMACÉN (TABLERO DE DESPACHO)
+       ========================================== -->
+  <main id="almacenModuleView" class="hidden flex-1 flex flex-col max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 space-y-4">
+    <!-- Barra de Control Superior del Tablero de Almacén -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="px-2.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-black uppercase tracking-wider">
+            MOSTRADOR ALMACÉN
+          </span>
+          <span class="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            Radar Activo (30s)
+          </span>
+        </div>
+        <h2 class="text-lg sm:text-xl font-black text-white mt-1">
+          Tablero de Solicitudes Entrantes
+        </h2>
+        <p class="text-xs text-slate-400">
+          Ordenado automáticamente por estado <strong class="text-amber-300">Pendiente</strong> y prioridad <strong class="text-red-400">Urgente</strong>
+        </p>
+      </div>
+
+      <!-- Filtros de Estado del Tablero + Botón Actualizar -->
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-almacen-filter="Pendiente"
+          class="almacen-filter-btn px-3.5 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider bg-amber-500 text-slate-950 shadow transition"
+        >
+          ⏳ Pendientes (<span id="countAlmacenPendientes">0</span>)
+        </button>
+        <button
+          type="button"
+          data-almacen-filter="Todas"
+          class="almacen-filter-btn px-3.5 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
+        >
+          📚 Todas (<span id="countAlmacenTodas">0</span>)
+        </button>
+        <button
+          type="button"
+          id="btnRefreshAlmacen"
+          class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-white transition"
+        >
+          🔄 Refrescar
+        </button>
+      </div>
+    </div>
+
+    <!-- Contenedor de Tarjetas de Solicitudes Entrantes -->
+    <div id="almacenBoardGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!-- Renderizado dinámicamente por ventas.js -->
+    </div>
+  </main>
+
+  <!-- ==========================================
+       MODAL DE VISTA AMPLIADA DE IMAGEN
+       ========================================== -->
+  <div
+    id="imagePreviewModal"
+    class="fixed inset-0 z-50 hidden bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+  >
+    <div class="relative max-w-3xl w-full bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+        <h4 id="imagePreviewTitle" class="text-sm font-bold text-white truncate">Vista del Repuesto</h4>
+        <button
+          type="button"
+          id="btnCloseImagePreview"
+          class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold"
+        >
+          ✕
+        </button>
+      </div>
+      <div class="p-4 flex items-center justify-center bg-slate-950 min-h-[280px] max-h-[75vh]">
+        <img id="imagePreviewElement" src="" alt="Repuesto" class="max-h-[68vh] w-auto object-contain rounded-xl" />
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL DE CONFIGURACIÓN DE URL APPS SCRIPT
+       ========================================== -->
+  <div
+    id="settingsModal"
+    class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+  >
+    <div class="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-black text-white">⚙️ Conexión Google Apps Script</h3>
+        <button
+          type="button"
+          id="btnCloseSettings"
+          class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div class="space-y-2">
+        <label for="gasUrlInput" class="block text-xs font-bold uppercase tracking-wider text-slate-400">
+          URL del Web App (termina en /exec)
+        </label>
+        <input
+          type="url"
+          id="gasUrlInput"
+          placeholder="https://script.google.com/macros/s/.../exec"
+          class="w-full px-3.5 py-3 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs sm:text-sm focus:outline-none focus:border-red-500"
+        />
+        <p class="text-[11px] text-slate-400">
+          Conectado a la hoja de cálculo <strong>Inventario Almacen</strong> (`127o9T9u2r3BVVR-S9kq74FiGsxXCkifErOthQM0pv0k`).
+        </p>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button
+          type="button"
+          id="btnResetDefaultUrl"
+          class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300"
+        >
+          Restaurar URL Predeterminada
+        </button>
+        <button
+          type="button"
+          id="btnSaveSettings"
+          class="px-5 py-2.5 rounded-xl bg-gac-red hover:bg-gac-redHover text-xs font-black uppercase tracking-wider text-white"
+        >
+          Guardar y Sincronizar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       TOAST DE NOTIFICACIÓN RÁPIDA
+       ========================================== -->
+  <div
+    id="toastContainer"
+    class="fixed bottom-20 sm:bottom-6 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+  ></div>
+
+  <!-- Lógica Principal ES6 -->
+  <script src="./ventas.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,24 @@
+{
+  "name": "GAC Motors - Mostrador Digital Ventas-Almacén",
+  "short_name": "GAC Ventas-Almacén",
+  "description": "Mostrador Digital en tiempo real para solicitudes de repuestos entre Ventas y Almacén - GAC Motors",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#b31217",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
