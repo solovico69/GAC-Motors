@@ -5,7 +5,7 @@
  * ROL: Service Worker para Instalabilidad PWA y Caché de Recursos Estáticos
  */
 
-const CACHE_NAME = "gac-mostrador-ventas-v2";
+const CACHE_NAME = "gac-mostrador-ventas-v3";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",

@@ -343,6 +343,25 @@ function bindUIEvents() {
     applyMultiFieldCatalogFilter();
   });
 
+  // Filtros específicos adicionales: MODELO y APLICA A
+  document.getElementById("filterModeloSelect")?.addEventListener("change", () => {
+    applyMultiFieldCatalogFilter();
+  });
+  document.getElementById("filterAplicaASelect")?.addEventListener("change", () => {
+    applyMultiFieldCatalogFilter();
+  });
+  document.getElementById("btnResetSpecificFilters")?.addEventListener("click", () => {
+    const modSelect = document.getElementById("filterModeloSelect");
+    const aplSelect = document.getElementById("filterAplicaASelect");
+    const chkStock = document.getElementById("chkOnlyStock");
+    if (modSelect) modSelect.value = "";
+    if (aplSelect) aplSelect.value = "";
+    if (chkStock) chkStock.checked = false;
+    if (searchInput) searchInput.value = "";
+    btnClearSearch?.classList.add("hidden");
+    applyMultiFieldCatalogFilter();
+  });
+
   // Chips de filtro rápido (GS3, GS4, GS8, etc.)
   document.querySelectorAll(".quick-filter-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
@@ -378,6 +397,8 @@ function bindUIEvents() {
   document.getElementById("btnClearCart")?.addEventListener("click", () => {
     VentasState.cart = [];
     updateCartUI();
+    renderCartDrawerItems();
+    renderCatalogGrid();
     document.getElementById("cartDrawerModal")?.classList.add("hidden");
     showToast("Carrito vaciado", "info");
   });
@@ -626,6 +647,7 @@ async function fetchCatalog(showNotification = false) {
 
     if (data && data.success && Array.isArray(data.items)) {
       VentasState.catalog = data.items;
+      populateCatalogSpecificFilters();
       applyMultiFieldCatalogFilter();
       if (showNotification) {
         showToast(`Catálogo actualizado (${data.items.length} repuestos)`, "success");
@@ -647,9 +669,69 @@ async function fetchCatalog(showNotification = false) {
 }
 
 /**
- * Buscador Inteligente Multi-Campo en Tiempo Real:
- * Permite escribir combinaciones como "Filtro GS3", "Valvoline", "Pastilla DFSK" o "GS4"
- * y evalúa cada palabra/token contra Descripción, Marca, Modelo, Aplica_A, Código y N_Parte.
+ * Obtiene el Stock estrictamente desde EXIST_VIRTUAL (Stock_Virtual)
+ */
+function getVirtualStock(item) {
+  if (item.Stock_Virtual !== undefined && item.Stock_Virtual !== null && item.Stock_Virtual !== "") {
+    return Number(item.Stock_Virtual) || 0;
+  }
+  return Number(item.Stock) || 0;
+}
+
+/**
+ * Pobla dinámicamente los selectores específicos de MODELO y APLICA A a partir del catálogo cargado
+ */
+function populateCatalogSpecificFilters() {
+  const modeloSelect = document.getElementById("filterModeloSelect");
+  const aplicaSelect = document.getElementById("filterAplicaASelect");
+  if (!modeloSelect || !aplicaSelect) return;
+
+  const prevModelo = modeloSelect.value;
+  const prevAplica = aplicaSelect.value;
+
+  const modelosSet = new Set();
+  const aplicaSet = new Set();
+
+  VentasState.catalog.forEach((item) => {
+    const mod = (item.Modelo || "").toString().trim();
+    if (mod) modelosSet.add(mod);
+
+    const rawAplica = (item.Aplica_A || "").toString().trim();
+    if (rawAplica) {
+      // Soportar tanto valores individuales como etiquetas separadas por coma en APLICA A
+      rawAplica
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((tag) => aplicaSet.add(tag));
+    }
+  });
+
+  const sortedModelos = Array.from(modelosSet).sort((a, b) => a.localeCompare(b));
+  const sortedAplica = Array.from(aplicaSet).sort((a, b) => a.localeCompare(b));
+
+  modeloSelect.innerHTML = `<option value="">Todos los Modelos (${sortedModelos.length})</option>`;
+  sortedModelos.forEach((m) => {
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = m;
+    if (m === prevModelo) opt.selected = true;
+    modeloSelect.appendChild(opt);
+  });
+
+  aplicaSelect.innerHTML = `<option value="">Todas las Aplicaciones - Aplica A (${sortedAplica.length})</option>`;
+  sortedAplica.forEach((ap) => {
+    const opt = document.createElement("option");
+    opt.value = ap;
+    opt.textContent = ap;
+    if (ap === prevAplica) opt.selected = true;
+    aplicaSelect.appendChild(opt);
+  });
+}
+
+/**
+ * Buscador Inteligente Multi-Campo en Tiempo Real + Filtros Específicos (MODELO y APLICA A):
+ * Permite combinar la búsqueda libre con el selector de MODELO, el selector de APLICA A y Stock Virtual.
  */
 function normalizeSearchText(str) {
   if (!str) return "";
@@ -662,15 +744,45 @@ function normalizeSearchText(str) {
 
 function applyMultiFieldCatalogFilter() {
   const queryRaw = document.getElementById("multiSearchInput")?.value || "";
+  const selectedModelo = (document.getElementById("filterModeloSelect")?.value || "").trim();
+  const selectedAplica = (document.getElementById("filterAplicaASelect")?.value || "").trim();
   const onlyWithStock = document.getElementById("chkOnlyStock")?.checked || false;
 
   const tokens = normalizeSearchText(queryRaw)
     .split(/\s+/)
     .filter(Boolean);
 
+  const normSelectedModelo = normalizeSearchText(selectedModelo);
+  const normSelectedAplica = normalizeSearchText(selectedAplica);
+
   VentasState.filteredCatalog = VentasState.catalog.filter((item) => {
-    if (onlyWithStock && Number(item.Stock) <= 0) {
+    const virtualStock = getVirtualStock(item);
+    if (onlyWithStock && virtualStock <= 0) {
       return false;
+    }
+
+    // Filtro específico por MODELO
+    if (normSelectedModelo) {
+      const itemModelo = normalizeSearchText(item.Modelo || "");
+      if (itemModelo !== normSelectedModelo && !itemModelo.includes(normSelectedModelo)) {
+        return false;
+      }
+    }
+
+    // Filtro específico por APLICA A
+    if (normSelectedAplica) {
+      const itemAplicaTokens = (item.Aplica_A || "")
+        .toString()
+        .split(",")
+        .map((s) => normalizeSearchText(s.trim()))
+        .filter(Boolean);
+      const itemAplicaFull = normalizeSearchText(item.Aplica_A || "");
+      if (
+        !itemAplicaTokens.includes(normSelectedAplica) &&
+        !itemAplicaFull.includes(normSelectedAplica)
+      ) {
+        return false;
+      }
     }
 
     if (tokens.length === 0) return true;
@@ -793,7 +905,7 @@ function renderCatalogGrid() {
       const modelo = escapeHtml(item.Modelo || "");
       const aplica = escapeHtml(item.Aplica_A || "");
       const ubicacion = escapeHtml(item.Ubicacion_Almacen || "SIN UBICACIÓN");
-      const stock = Number(item.Stock) || 0;
+      const stock = getVirtualStock(item);
 
       const photoList = getItemPhotoList(item);
       const rawMainUrl = photoList.length > 0 ? photoList[0] : "";
@@ -1097,7 +1209,8 @@ function addItemToCart(sku, quantityToAdd = 1) {
       Descripcion_Repuesto: catalogItem.Descripcion || "Sin descripción",
       Ubicacion_Almacen: catalogItem.Ubicacion_Almacen || "SIN UBICACIÓN",
       Cantidad: quantityToAdd,
-      Stock: Number(catalogItem.Stock) || 0,
+      Observacion_Vendedor: "",
+      Stock: getVirtualStock(catalogItem),
       Imagen_URL: catalogItem.Imagen_URL || ""
     });
     showToast("Repuesto añadido al pedido", "success");
@@ -1163,44 +1276,66 @@ function renderCartDrawerItems() {
   container.innerHTML = VentasState.cart
     .map((item, idx) => {
       return `
-        <div class="flex items-center justify-between gap-3 bg-slate-950 border border-slate-800 rounded-2xl p-3">
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <span class="px-2 py-0.5 rounded bg-slate-800 text-[11px] font-black text-slate-200">
-                SKU: ${escapeHtml(item.SKU_Articulo)}
-              </span>
-              <span class="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[11px] font-extrabold text-amber-300">
-                📍 ${escapeHtml(item.Ubicacion_Almacen)}
-              </span>
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded bg-slate-800 text-[11px] font-black text-slate-200">
+                  SKU: ${escapeHtml(item.SKU_Articulo)}
+                </span>
+                <span class="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[11px] font-extrabold text-amber-300">
+                  📍 ${escapeHtml(item.Ubicacion_Almacen)}
+                </span>
+              </div>
+              <p class="text-xs sm:text-sm font-bold text-white truncate mt-1">
+                ${escapeHtml(item.Descripcion_Repuesto)}
+              </p>
             </div>
-            <p class="text-xs sm:text-sm font-bold text-white truncate mt-1">
-              ${escapeHtml(item.Descripcion_Repuesto)}
-            </p>
+
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                data-cart-dec="${idx}"
+                class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-xs"
+              >−</button>
+              <span class="w-8 text-center font-black text-sm text-white">${item.Cantidad}</span>
+              <button
+                type="button"
+                data-cart-inc="${idx}"
+                class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-xs"
+              >+</button>
+              <button
+                type="button"
+                data-cart-del="${idx}"
+                class="w-7 h-7 rounded-lg bg-red-950/70 hover:bg-red-900 text-red-300 font-bold text-xs ml-1"
+                title="Quitar artículo"
+              >✕</button>
+            </div>
           </div>
 
-          <div class="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              data-cart-dec="${idx}"
-              class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-xs"
-            >−</button>
-            <span class="w-8 text-center font-black text-sm text-white">${item.Cantidad}</span>
-            <button
-              type="button"
-              data-cart-inc="${idx}"
-              class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-xs"
-            >+</button>
-            <button
-              type="button"
-              data-cart-del="${idx}"
-              class="w-7 h-7 rounded-lg bg-red-950/70 hover:bg-red-900 text-red-300 font-bold text-xs ml-1"
-              title="Quitar artículo"
-            >✕</button>
+          <!-- Campo de Observación específica del Vendedor para este artículo -->
+          <div>
+            <input
+              type="text"
+              data-cart-obs="${idx}"
+              value="${escapeHtml(item.Observacion_Vendedor || "")}"
+              placeholder="✏️ Observación para este artículo (ej: Lado derecho, verificar muestra, urgente cliente...)"
+              class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700/80 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-red-500 transition"
+            />
           </div>
         </div>
       `;
     })
     .join("");
+
+  container.querySelectorAll("[data-cart-obs]").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      const idx = parseInt(input.getAttribute("data-cart-obs"), 10);
+      if (VentasState.cart[idx]) {
+        VentasState.cart[idx].Observacion_Vendedor = e.target.value;
+      }
+    });
+  });
 
   container.querySelectorAll("[data-cart-dec]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1264,7 +1399,8 @@ async function submitCartSolicitud() {
       SKU_Articulo: it.SKU_Articulo,
       Descripcion_Repuesto: it.Descripcion_Repuesto,
       Ubicacion_Almacen: it.Ubicacion_Almacen,
-      Cantidad: it.Cantidad
+      Cantidad: it.Cantidad,
+      Observacion_Vendedor: (it.Observacion_Vendedor || "").trim()
     }))
   };
 
@@ -1462,22 +1598,32 @@ function renderMisSolicitudesSeller() {
       const itemsHtml = (sol.items || [])
         .map(
           (it) => `
-            <div class="flex items-center justify-between gap-2 py-2 px-3 rounded-xl bg-slate-950 border border-slate-800/80 text-xs">
-              <div class="min-w-0">
-                <span class="font-black text-slate-300">[${escapeHtml(it.SKU_Articulo)}]</span>
-                <span class="font-semibold text-white ml-1">${escapeHtml(it.Descripcion_Repuesto)}</span>
-                <span class="ml-2 text-amber-300 font-bold">📍 ${escapeHtml(it.Ubicacion_Almacen)}</span>
+            <div class="py-2.5 px-3 rounded-xl bg-slate-950 border border-slate-800/80 text-xs space-y-1">
+              <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <span class="font-black text-slate-300">[${escapeHtml(it.SKU_Articulo)}]</span>
+                  <span class="font-semibold text-white ml-1">${escapeHtml(it.Descripcion_Repuesto)}</span>
+                  <span class="ml-2 text-amber-300 font-bold">📍 ${escapeHtml(it.Ubicacion_Almacen)}</span>
+                </div>
+                <span class="px-2.5 py-1 rounded-lg bg-slate-800 text-white font-black shrink-0">
+                  Cant: ${it.Cantidad}
+                </span>
               </div>
-              <span class="px-2.5 py-1 rounded-lg bg-slate-800 text-white font-black shrink-0">
-                Cant: ${it.Cantidad}
-              </span>
+              ${
+                it.Observacion_Vendedor
+                  ? `<p class="text-[11px] text-blue-300 font-semibold pl-1">
+                      📝 Nota Vendedor: "${escapeHtml(it.Observacion_Vendedor)}"
+                    </p>`
+                  : ""
+              }
             </div>
           `
         )
         .join("");
 
+      const obsAlmacenTexto = sol.observacionAlmacen || sol.observacion || "";
       const responseBox =
-        status !== "Pendiente" || sol.observacion || sol.almacenista
+        status !== "Pendiente" || obsAlmacenTexto || sol.almacenista
           ? `
             <div class="mt-3 p-3 rounded-xl border ${
               status === "Despachado"
@@ -1489,8 +1635,8 @@ function renderMisSolicitudesSeller() {
                 ${sol.fechaRespuesta ? ` • <span class="opacity-80">${escapeHtml(sol.fechaRespuesta)}</span>` : ""}
               </p>
               ${
-                sol.observacion
-                  ? `<p class="mt-1 font-semibold">💬 Observación: "${escapeHtml(sol.observacion)}"</p>`
+                obsAlmacenTexto
+                  ? `<p class="mt-1 font-semibold">💬 Observación Almacén: "${escapeHtml(obsAlmacenTexto)}"</p>`
                   : ""
               }
             </div>
@@ -1604,7 +1750,7 @@ function renderAlmacenBoard() {
         .map(
           (item) => `
             <div class="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div class="space-y-1 min-w-0 flex-1">
+              <div class="space-y-1.5 min-w-0 flex-1">
                 <div class="flex items-center gap-2">
                   <span class="px-2 py-0.5 rounded bg-slate-800 text-xs font-black text-white">
                     SKU: ${escapeHtml(item.SKU_Articulo)}
@@ -1616,6 +1762,13 @@ function renderAlmacenBoard() {
                 <p class="text-sm sm:text-base font-extrabold text-white leading-snug">
                   ${escapeHtml(item.Descripcion_Repuesto)}
                 </p>
+                ${
+                  item.Observacion_Vendedor
+                    ? `<div class="px-2.5 py-1.5 rounded-xl bg-blue-950/70 border border-blue-700/60 text-blue-200 text-xs font-bold">
+                        📝 Nota del Vendedor: "${escapeHtml(item.Observacion_Vendedor)}"
+                      </div>`
+                    : ""
+                }
               </div>
 
               <!-- UBICACIÓN FÍSICA EN GRANDE Y NEGRITA PARA RECOLECCIÓN INMEDIATA -->

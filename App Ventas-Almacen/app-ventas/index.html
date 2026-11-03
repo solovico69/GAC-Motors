@@ -329,6 +329,46 @@
           </div>
         </div>
 
+        <!-- Filtros Específicos Adicionales: MODELO y APLICA A -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 mt-3 pt-3 border-t border-slate-800/80">
+          <!-- Buscador / Selector por MODELO -->
+          <div class="sm:col-span-1 lg:col-span-5">
+            <label for="filterModeloSelect" class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
+              🚗 Filtrar por MODELO
+            </label>
+            <select
+              id="filterModeloSelect"
+              class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs sm:text-sm font-semibold focus:outline-none focus:border-red-500 transition"
+            >
+              <option value="">Todos los Modelos</option>
+            </select>
+          </div>
+
+          <!-- Buscador / Selector por APLICA A -->
+          <div class="sm:col-span-1 lg:col-span-5">
+            <label for="filterAplicaASelect" class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
+              🔧 Filtrar por APLICA A (Compatibilidad)
+            </label>
+            <select
+              id="filterAplicaASelect"
+              class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs sm:text-sm font-semibold focus:outline-none focus:border-red-500 transition"
+            >
+              <option value="">Todas las Aplicaciones (Aplica A)</option>
+            </select>
+          </div>
+
+          <!-- Botón Limpiar Filtros Específicos -->
+          <div class="sm:col-span-2 lg:col-span-2 flex items-end">
+            <button
+              type="button"
+              id="btnResetSpecificFilters"
+              class="w-full py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-extrabold uppercase tracking-wider transition"
+            >
+              ✕ Limpiar Filtros
+            </button>
+          </div>
+        </div>
+
         <!-- Contador de resultados y chips rápidos -->
         <div class="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2.5 border-t border-slate-800/80 text-xs text-slate-400">
           <div>

@@ -16,7 +16,7 @@ var SHEET_SOLICITUDES_VENTAS = "Solicitudes_Ventas";
 var SHEET_REPUESTOS_VENTAS = "Repuestos";
 var SHEET_BASE_DATOS_VENTAS = "Base_Datos";
 
-// Encabezados oficiales para la pestaña Solicitudes_Ventas
+// Encabezados oficiales confirmados para la pestaña Solicitudes_Ventas
 var SOLICITUDES_HEADERS = [
   "N# Solicitud",
   "Fecha_Hora",
@@ -27,21 +27,17 @@ var SOLICITUDES_HEADERS = [
   "Cantidad",
   "Prioridad",
   "Status",
+  "Observacion_Vendedor",
   "Almacenista",
-  "Observacion",
-  "Fecha_Respuesta"
+  "Observacion_Almacen",
+  "Fecha_Hora_Repuesta"
 ];
 
 /**
  * ==========================================
  * ROUTER UNIFICADO (doGet / doPost)
  * ==========================================
- * NOTA IMPORTANTE PARA GOOGLE APPS SCRIPT:
- * Si pegas este archivo dentro del mismo proyecto de Apps Script que ya tiene "Code.gs",
- * este doGet y doPost atienden TANTO las acciones de la App 1 (Inventario)
- * COMO las nuevas acciones de la App 2 (Mostrador Digital Ventas-Almacén) sin afectar
- * la lógica previa. Si tienes un único doGet/doPost en Code.gs, puedes comentar o eliminar
- * el doGet/doPost antiguo de Code.gs y dejar este router unificado activo.
+ * Atiende tanto las acciones de la App 1 (Inventario) como las de la App 2 (Mostrador Ventas-Almacén).
  */
 function doGet(e) {
   try {
@@ -233,7 +229,7 @@ function getUsuarios() {
 
 /**
  * 2. getCatalog()
- * Obtiene repuestos (Código, Descripción, Marca, Modelo, Aplica_A, Stock, Ubicacion_Almacen, Imagen_URL)
+ * Obtiene repuestos (Código, Descripción, Marca, Modelo, Aplica_A, Stock según EXIST_VIRTUAL, Ubicacion_Almacen, Imagen_URL)
  * desde la pestaña Repuestos.
  * REGLA DE PROTECCIÓN DE FÓRMULAS: Lectura exclusiva de valores calculados (getValues()),
  * nunca modifica ni sobrescribe ninguna columna o fórmula de Repuestos.
@@ -268,8 +264,8 @@ function getCatalog() {
   var idxModelo = findColumnIndex(headers, ["MODELO"]);
   var idxVersion = findColumnIndex(headers, ["VERSION"]);
   var idxAplicaA = findColumnIndex(headers, ["APLICA A", "APLICA_A", "COMPATIBILIDAD"]);
-  var idxStockFisico = findColumnIndex(headers, ["EXIST_FISICA", "STOCK_FISICO", "STOCK"]);
-  var idxStockVirtual = findColumnIndex(headers, ["EXIST_VIRTUAL", "STOCK_VIRTUAL"]);
+  var idxStockFisico = findColumnIndex(headers, ["EXIST_FISICA", "STOCK_FISICO"]);
+  var idxStockVirtual = findColumnIndex(headers, ["EXIST_VIRTUAL", "STOCK_VIRTUAL", "STOCK"]);
   var idxUbicacion = findColumnIndex(headers, ["UBICACION", "UBICACION_ALMACEN"]);
   var idxImagen = findColumnIndex(headers, ["FOTOS", "IMAGEN_URL", "FOTO", "IMAGEN"]);
 
@@ -288,16 +284,17 @@ function getCatalog() {
     // Ignorar filas completamente vacías
     if (!codigo && !descripcion) continue;
 
-    // Determinar Stock priorizando EXIST_FISICA si tiene valor numérico, o EXIST_VIRTUAL como respaldo
-    var rawFisico = idxStockFisico !== -1 ? row[idxStockFisico] : "";
+    // Determinar Stock estrictamente según EXIST_VIRTUAL
     var rawVirtual = idxStockVirtual !== -1 ? row[idxStockVirtual] : "";
-    var stockVal = 0;
-
-    if (rawFisico !== "" && rawFisico !== null && rawFisico !== undefined && !isNaN(Number(rawFisico))) {
-      stockVal = Number(rawFisico);
-    } else if (rawVirtual !== "" && rawVirtual !== null && rawVirtual !== undefined && !isNaN(Number(rawVirtual))) {
-      stockVal = Number(rawVirtual);
-    }
+    var rawFisico = idxStockFisico !== -1 ? row[idxStockFisico] : "";
+    var stockVirtualVal =
+      rawVirtual !== "" && rawVirtual !== null && rawVirtual !== undefined && !isNaN(Number(rawVirtual))
+        ? Number(rawVirtual)
+        : 0;
+    var stockFisicoVal =
+      rawFisico !== "" && rawFisico !== null && rawFisico !== undefined && !isNaN(Number(rawFisico))
+        ? Number(rawFisico)
+        : 0;
 
     // Procesar URLs de fotos (puede haber varias separadas por coma)
     var rawFotos = idxImagen !== -1 && row[idxImagen] ? row[idxImagen].toString().trim() : "";
@@ -328,9 +325,9 @@ function getCatalog() {
       Modelo: modelo,
       Version: version,
       Aplica_A: aplicaA,
-      Stock: stockVal,
-      Stock_Fisico: rawFisico !== "" && rawFisico !== null ? Number(rawFisico) || 0 : 0,
-      Stock_Virtual: rawVirtual !== "" && rawVirtual !== null ? Number(rawVirtual) || 0 : 0,
+      Stock: stockVirtualVal,
+      Stock_Virtual: stockVirtualVal,
+      Stock_Fisico: stockFisicoVal,
       Ubicacion_Almacen: ubicacion || "SIN UBICACIÓN",
       Imagen_URL: mainImageUrl,
       Fotos_Galeria: fotosList
@@ -362,7 +359,6 @@ function getOrCreateSolicitudesSheet() {
     return sheet;
   }
 
-  // Si la hoja existe pero está vacía, insertar encabezados
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, SOLICITUDES_HEADERS.length).setValues([SOLICITUDES_HEADERS]);
     sheet.getRange(1, 1, 1, SOLICITUDES_HEADERS.length)
@@ -377,11 +373,10 @@ function getOrCreateSolicitudesSheet() {
 
 /**
  * 3. crearSolicitud(payload)
- * Registra solicitudes en Solicitudes_Ventas.
- * Campos: N# Solicitud (ej: SOL-0001), Fecha_Hora, Vendedor, SKU_Articulo,
- *         Descripcion_Repuesto, Ubicacion_Almacen, Cantidad, Prioridad, Status="Pendiente".
- * NOTA: NO incluye ningún campo de Cliente u Orden de Taller.
- *       Si son varios artículos, registra una fila individual por cada uno bajo el mismo N# Solicitud.
+ * Registra solicitudes en Solicitudes_Ventas mapeando dinámicamente por nombre de encabezado.
+ * Encabezados en hoja: N# Solicitud, Fecha_Hora, Vendedor, SKU_Articulo, Descripcion_Repuesto,
+ * Ubicacion_Almacen, Cantidad, Prioridad, Status, Observacion_Vendedor, Almacenista,
+ * Observacion_Almacen, Fecha_Hora_Repuesta.
  */
 function crearSolicitud(payload) {
   var lock = LockService.getScriptLock();
@@ -404,7 +399,7 @@ function crearSolicitud(payload) {
 
     var sheet = getOrCreateSolicitudesSheet();
     var lastRow = sheet.getLastRow();
-    var lastCol = Math.max(sheet.getLastColumn(), SOLICITUDES_HEADERS.length);
+    var lastCol = Math.max(sheet.getLastColumn(), 1);
     var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
 
     var idxNumSol = findColumnIndex(headers, ["N# Solicitud", "N# SOLICITUD", "ID_SOLICITUD"]);
@@ -434,7 +429,7 @@ function crearSolicitud(payload) {
     var tz = Session.getScriptTimeZone() || "America/Caracas";
     var fechaHora = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd HH:mm:ss");
 
-    // Mapear índices de columnas en la hoja para escribir únicamente en columnas de datos
+    // Mapear índices de columnas estrictamente por nombre de encabezado en la Fila 1
     var colIdxMap = {
       numSolicitud: findColumnIndex(headers, ["N# Solicitud", "N# SOLICITUD"]),
       fechaHora: findColumnIndex(headers, ["Fecha_Hora", "FECHA_HORA", "FECHA"]),
@@ -445,9 +440,12 @@ function crearSolicitud(payload) {
       cantidad: findColumnIndex(headers, ["Cantidad", "CANTIDAD"]),
       prioridad: findColumnIndex(headers, ["Prioridad", "PRIORIDAD"]),
       status: findColumnIndex(headers, ["Status", "STATUS", "ESTADO"]),
-      almacenista: findColumnIndex(headers, ["Almacenista", "ALMACENISTA"]),
-      observacion: findColumnIndex(headers, ["Observacion", "OBSERVACION", "NOTAS"]),
-      fechaRespuesta: findColumnIndex(headers, ["Fecha_Respuesta", "FECHA_RESPUESTA"])
+      obsVendedor: findColumnIndex(headers, [
+        "Observacion_Vendedor",
+        "OBSERVACION_VENDEDOR",
+        "Observaciones_Vendedor",
+        "Nota_Vendedor"
+      ])
     };
 
     var rowsToAppend = [];
@@ -458,6 +456,7 @@ function crearSolicitud(payload) {
       var desc = (item.Descripcion_Repuesto || item.Descripcion || "").toString().trim();
       var ubic = (item.Ubicacion_Almacen || item.Ubicacion || "SIN UBICACIÓN").toString().trim();
       var cant = Number(item.Cantidad) > 0 ? Number(item.Cantidad) : 1;
+      var obsVend = (item.Observacion_Vendedor || item.Observacion || "").toString().trim();
 
       var newRow = new Array(lastCol).fill("");
 
@@ -470,11 +469,11 @@ function crearSolicitud(payload) {
       if (colIdxMap.cantidad !== -1) newRow[colIdxMap.cantidad] = cant;
       if (colIdxMap.prioridad !== -1) newRow[colIdxMap.prioridad] = prioridad;
       if (colIdxMap.status !== -1) newRow[colIdxMap.status] = "Pendiente";
+      if (colIdxMap.obsVendedor !== -1) newRow[colIdxMap.obsVendedor] = obsVend;
 
       rowsToAppend.push(newRow);
     }
 
-    // Insertar todas las filas de la solicitud en bloque
     var startWriteRow = lastRow + 1;
     sheet.getRange(startWriteRow, 1, rowsToAppend.length, lastCol).setValues(rowsToAppend);
     SpreadsheetApp.flush();
@@ -497,7 +496,7 @@ function crearSolicitud(payload) {
 /**
  * 4. getSolicitudes()
  * Retorna el historial de solicitudes agrupadas por N# Solicitud con sus artículos,
- * estados, prioridad y observaciones de despacho.
+ * observaciones del vendedor por ítem, estados, prioridad y observaciones de despacho de almacén.
  */
 function getSolicitudes() {
   var sheet = getOrCreateSolicitudesSheet();
@@ -525,14 +524,34 @@ function getSolicitudes() {
     cantidad: findColumnIndex(headers, ["Cantidad", "CANTIDAD"]),
     prioridad: findColumnIndex(headers, ["Prioridad", "PRIORIDAD"]),
     status: findColumnIndex(headers, ["Status", "STATUS", "ESTADO"]),
+    obsVendedor: findColumnIndex(headers, [
+      "Observacion_Vendedor",
+      "OBSERVACION_VENDEDOR",
+      "Observaciones_Vendedor",
+      "Nota_Vendedor"
+    ]),
     almacenista: findColumnIndex(headers, ["Almacenista", "ALMACENISTA"]),
-    observacion: findColumnIndex(headers, ["Observacion", "OBSERVACION", "NOTAS"]),
-    fechaRespuesta: findColumnIndex(headers, ["Fecha_Respuesta", "FECHA_RESPUESTA"])
+    obsAlmacen: findColumnIndex(headers, [
+      "Observacion_Almacen",
+      "OBSERVACION_ALMACEN",
+      "Observacion",
+      "OBSERVACION",
+      "NOTAS"
+    ]),
+    fechaRespuesta: findColumnIndex(headers, [
+      "Fecha_Hora_Repuesta",
+      "FECHA_HORA_REPUESTA",
+      "Fecha_Hora_Respuesta",
+      "FECHA_HORA_RESPUESTA",
+      "Fecha_Respuesta",
+      "FECHA_RESPUESTA"
+    ])
   };
 
   var groupedMap = {};
   var orderKeys = [];
   var flatRows = [];
+  var tz = Session.getScriptTimeZone() || "America/Caracas";
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
@@ -545,7 +564,6 @@ function getSolicitudes() {
     var rawFecha = colIdx.fechaHora !== -1 ? row[colIdx.fechaHora] : "";
     var fechaStr = "";
     if (rawFecha instanceof Date) {
-      var tz = Session.getScriptTimeZone() || "America/Caracas";
       fechaStr = Utilities.formatDate(rawFecha, tz, "yyyy-MM-dd HH:mm:ss");
     } else if (rawFecha) {
       fechaStr = rawFecha.toString().trim();
@@ -558,13 +576,14 @@ function getSolicitudes() {
     var cantidad = colIdx.cantidad !== -1 && row[colIdx.cantidad] !== "" ? Number(row[colIdx.cantidad]) || 1 : 1;
     var prioridad = colIdx.prioridad !== -1 && row[colIdx.prioridad] ? row[colIdx.prioridad].toString().trim() : "Normal";
     var status = colIdx.status !== -1 && row[colIdx.status] ? row[colIdx.status].toString().trim() : "Pendiente";
+    var obsVendedor = colIdx.obsVendedor !== -1 && row[colIdx.obsVendedor] ? row[colIdx.obsVendedor].toString().trim() : "";
     var almacenista = colIdx.almacenista !== -1 && row[colIdx.almacenista] ? row[colIdx.almacenista].toString().trim() : "";
-    var observacion = colIdx.observacion !== -1 && row[colIdx.observacion] ? row[colIdx.observacion].toString().trim() : "";
+    var obsAlmacen = colIdx.obsAlmacen !== -1 && row[colIdx.obsAlmacen] ? row[colIdx.obsAlmacen].toString().trim() : "";
+
     var rawFechaResp = colIdx.fechaRespuesta !== -1 ? row[colIdx.fechaRespuesta] : "";
     var fechaRespStr = "";
     if (rawFechaResp instanceof Date) {
-      var tz2 = Session.getScriptTimeZone() || "America/Caracas";
-      fechaRespStr = Utilities.formatDate(rawFechaResp, tz2, "yyyy-MM-dd HH:mm:ss");
+      fechaRespStr = Utilities.formatDate(rawFechaResp, tz, "yyyy-MM-dd HH:mm:ss");
     } else if (rawFechaResp) {
       fechaRespStr = rawFechaResp.toString().trim();
     }
@@ -573,7 +592,8 @@ function getSolicitudes() {
       SKU_Articulo: sku,
       Descripcion_Repuesto: descripcion,
       Ubicacion_Almacen: ubicacion,
-      Cantidad: cantidad
+      Cantidad: cantidad,
+      Observacion_Vendedor: obsVendedor
     };
 
     flatRows.push({
@@ -584,10 +604,12 @@ function getSolicitudes() {
       Descripcion_Repuesto: descripcion,
       Ubicacion_Almacen: ubicacion,
       Cantidad: cantidad,
+      Observacion_Vendedor: obsVendedor,
       prioridad: prioridad,
       status: status,
       almacenista: almacenista,
-      observacion: observacion,
+      observacion: obsAlmacen,
+      observacionAlmacen: obsAlmacen,
       fechaRespuesta: fechaRespStr
     });
 
@@ -599,7 +621,8 @@ function getSolicitudes() {
         prioridad: prioridad,
         status: status,
         almacenista: almacenista,
-        observacion: observacion,
+        observacion: obsAlmacen,
+        observacionAlmacen: obsAlmacen,
         fechaRespuesta: fechaRespStr,
         items: []
       };
@@ -607,15 +630,16 @@ function getSolicitudes() {
     }
 
     groupedMap[idSol].items.push(itemObj);
-    // Actualizar estado/almacenista/observación si alguna fila tiene datos más recientes
+
     if (status && status !== "Pendiente") {
       groupedMap[idSol].status = status;
     }
     if (almacenista) {
       groupedMap[idSol].almacenista = almacenista;
     }
-    if (observacion) {
-      groupedMap[idSol].observacion = observacion;
+    if (obsAlmacen) {
+      groupedMap[idSol].observacion = obsAlmacen;
+      groupedMap[idSol].observacionAlmacen = obsAlmacen;
     }
     if (fechaRespStr) {
       groupedMap[idSol].fechaRespuesta = fechaRespStr;
@@ -636,9 +660,8 @@ function getSolicitudes() {
 /**
  * 5. actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, observacion)
  * Cambia el estado de todas las filas de un N# Solicitud a "Despachado" o "No Procesar"
- * y guarda el nombre del Almacenista y su nota/observación.
- * REGLA DE PROTECCIÓN DE FÓRMULAS: Verifica getFormulas() en la fila antes de escribir
- * únicamente en las columnas Status, Almacenista, Observacion y Fecha_Respuesta.
+ * y guarda Almacenista, Observacion_Almacen y Fecha_Hora_Repuesta buscando por nombre de encabezado.
+ * REGLA DE PROTECCIÓN DE FÓRMULAS: Verifica getFormulas() en la fila antes de escribir.
  */
 function actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, observacion) {
   var lock = LockService.getScriptLock();
@@ -665,25 +688,21 @@ function actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, 
     var idxNumSol = findColumnIndex(headers, ["N# Solicitud", "N# SOLICITUD"]);
     var idxStatus = findColumnIndex(headers, ["Status", "STATUS", "ESTADO"]);
     var idxAlmacenista = findColumnIndex(headers, ["Almacenista", "ALMACENISTA"]);
-    var idxObservacion = findColumnIndex(headers, ["Observacion", "OBSERVACION", "NOTAS"]);
-    var idxFechaResp = findColumnIndex(headers, ["Fecha_Respuesta", "FECHA_RESPUESTA"]);
-
-    // Si las columnas Almacenista, Observacion o Fecha_Respuesta no existían en la hoja, las agregamos al encabezado
-    if (idxAlmacenista === -1) {
-      lastCol++;
-      sheet.getRange(1, lastCol).setValue("Almacenista").setFontWeight("bold");
-      idxAlmacenista = lastCol - 1;
-    }
-    if (idxObservacion === -1) {
-      lastCol++;
-      sheet.getRange(1, lastCol).setValue("Observacion").setFontWeight("bold");
-      idxObservacion = lastCol - 1;
-    }
-    if (idxFechaResp === -1) {
-      lastCol++;
-      sheet.getRange(1, lastCol).setValue("Fecha_Respuesta").setFontWeight("bold");
-      idxFechaResp = lastCol - 1;
-    }
+    var idxObsAlmacen = findColumnIndex(headers, [
+      "Observacion_Almacen",
+      "OBSERVACION_ALMACEN",
+      "Observacion",
+      "OBSERVACION",
+      "NOTAS"
+    ]);
+    var idxFechaResp = findColumnIndex(headers, [
+      "Fecha_Hora_Repuesta",
+      "FECHA_HORA_REPUESTA",
+      "Fecha_Hora_Respuesta",
+      "FECHA_HORA_RESPUESTA",
+      "Fecha_Respuesta",
+      "FECHA_RESPUESTA"
+    ]);
 
     var solValues = sheet.getRange(2, idxNumSol + 1, lastRow - 1, 1).getValues();
     var formulasRange = sheet.getRange(2, 1, lastRow - 1, lastCol).getFormulas();
@@ -699,15 +718,15 @@ function actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, 
         var rowNumber = i + 2;
         var rowFormulas = formulasRange[i];
 
-        // Solo escribir si la celda destino NO contiene fórmula
+        // Solo escribir si la celda destino existe y NO contiene fórmula
         if (idxStatus !== -1 && !rowFormulas[idxStatus]) {
           sheet.getRange(rowNumber, idxStatus + 1).setValue(nuevoEstado);
         }
         if (idxAlmacenista !== -1 && !rowFormulas[idxAlmacenista]) {
           sheet.getRange(rowNumber, idxAlmacenista + 1).setValue(nombreAlmacenista || "");
         }
-        if (idxObservacion !== -1 && !rowFormulas[idxObservacion]) {
-          sheet.getRange(rowNumber, idxObservacion + 1).setValue(observacion || "");
+        if (idxObsAlmacen !== -1 && !rowFormulas[idxObsAlmacen]) {
+          sheet.getRange(rowNumber, idxObsAlmacen + 1).setValue(observacion || "");
         }
         if (idxFechaResp !== -1 && !rowFormulas[idxFechaResp]) {
           sheet.getRange(rowNumber, idxFechaResp + 1).setValue(fechaResp);
@@ -740,4 +759,3 @@ function actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, 
     lock.releaseLock();
   }
 }
-
