@@ -106,7 +106,8 @@ function doPost(e) {
           postData.idSolicitud,
           postData.nuevoEstado,
           postData.nombreAlmacenista,
-          postData.observacion
+          postData.observacion,
+          postData.respuestasPorItem
         )
       );
     } else {
@@ -593,7 +594,8 @@ function getSolicitudes() {
       Descripcion_Repuesto: descripcion,
       Ubicacion_Almacen: ubicacion,
       Cantidad: cantidad,
-      Observacion_Vendedor: obsVendedor
+      Observacion_Vendedor: obsVendedor,
+      Observacion_Almacen: obsAlmacen
     };
 
     flatRows.push({
@@ -658,12 +660,19 @@ function getSolicitudes() {
 }
 
 /**
- * 5. actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, observacion)
- * Cambia el estado de todas las filas de un N# Solicitud a "Despachado" o "No Procesar"
- * y guarda Almacenista, Observacion_Almacen y Fecha_Hora_Repuesta buscando por nombre de encabezado.
+ * 5. actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, observacion, respuestasPorItem)
+ * Cambia el estado de todas las filas de un N# Solicitud y guarda Almacenista,
+ * Observacion_Almacen (específica por cada artículo/línea o general) y Fecha_Hora_Repuesta
+ * buscando estrictamente por nombre de encabezado.
  * REGLA DE PROTECCIÓN DE FÓRMULAS: Verifica getFormulas() en la fila antes de escribir.
  */
-function actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, observacion) {
+function actualizarEstadoSolicitud(
+  idSolicitud,
+  nuevoEstado,
+  nombreAlmacenista,
+  observacion,
+  respuestasPorItem
+) {
   var lock = LockService.getScriptLock();
   lock.waitLock(15000);
 
@@ -671,9 +680,7 @@ function actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, 
     if (!idSolicitud) {
       return { success: false, error: "Falta el identificador de la solicitud (idSolicitud)." };
     }
-    if (!nuevoEstado) {
-      return { success: false, error: "Debe indicar el nuevo estado ('Despachado' o 'No Procesar')." };
-    }
+    var estadoFinal = nuevoEstado ? nuevoEstado.toString().trim() : "Respondido";
 
     var sheet = getOrCreateSolicitudesSheet();
     var lastRow = sheet.getLastRow();
@@ -686,6 +693,7 @@ function actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, 
     var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
 
     var idxNumSol = findColumnIndex(headers, ["N# Solicitud", "N# SOLICITUD"]);
+    var idxSku = findColumnIndex(headers, ["SKU_Articulo", "SKU_ARTICULO", "ARTICULO", "CODIGO"]);
     var idxStatus = findColumnIndex(headers, ["Status", "STATUS", "ESTADO"]);
     var idxAlmacenista = findColumnIndex(headers, ["Almacenista", "ALMACENISTA"]);
     var idxObsAlmacen = findColumnIndex(headers, [
@@ -704,34 +712,76 @@ function actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, 
       "FECHA_RESPUESTA"
     ]);
 
-    var solValues = sheet.getRange(2, idxNumSol + 1, lastRow - 1, 1).getValues();
+    var allValues = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
     var formulasRange = sheet.getRange(2, 1, lastRow - 1, lastCol).getFormulas();
 
     var normalizedTarget = idSolicitud.toString().trim().toUpperCase();
     var tz = Session.getScriptTimeZone() || "America/Caracas";
     var fechaResp = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd HH:mm:ss");
     var updatedRows = 0;
+    var itemLineCounter = 0;
+    var resumenRespuestas = [];
 
-    for (var i = 0; i < solValues.length; i++) {
-      var cellVal = solValues[i][0] ? solValues[i][0].toString().trim().toUpperCase() : "";
+    for (var i = 0; i < allValues.length; i++) {
+      var rowVals = allValues[i];
+      var cellVal = idxNumSol !== -1 && rowVals[idxNumSol]
+        ? rowVals[idxNumSol].toString().trim().toUpperCase()
+        : "";
+
       if (cellVal === normalizedTarget) {
         var rowNumber = i + 2;
         var rowFormulas = formulasRange[i];
+        var rowSku = idxSku !== -1 && rowVals[idxSku] ? rowVals[idxSku].toString().trim() : "";
+
+        // Determinar la respuesta específica para esta línea de artículo
+        var obsLinea = observacion ? observacion.toString().trim() : "";
+        if (Array.isArray(respuestasPorItem) && respuestasPorItem.length > 0) {
+          var matchedEntry = null;
+          // 1. Coincidencia exacta por orden de línea del pedido
+          if (
+            respuestasPorItem[itemLineCounter] &&
+            respuestasPorItem[itemLineCounter].observacionAlmacen !== undefined
+          ) {
+            matchedEntry = respuestasPorItem[itemLineCounter];
+          } else {
+            // 2. Respaldo por coincidencia de SKU
+            for (var k = 0; k < respuestasPorItem.length; k++) {
+              if (
+                respuestasPorItem[k] &&
+                String(respuestasPorItem[k].sku || "").trim() === rowSku
+              ) {
+                matchedEntry = respuestasPorItem[k];
+                break;
+              }
+            }
+          }
+
+          if (matchedEntry && matchedEntry.observacionAlmacen !== undefined) {
+            obsLinea = matchedEntry.observacionAlmacen.toString().trim();
+          }
+        }
+
+        if (obsLinea) {
+          resumenRespuestas.push(
+            (rowSku ? "[" + rowSku + "] " : "") + obsLinea
+          );
+        }
 
         // Solo escribir si la celda destino existe y NO contiene fórmula
         if (idxStatus !== -1 && !rowFormulas[idxStatus]) {
-          sheet.getRange(rowNumber, idxStatus + 1).setValue(nuevoEstado);
+          sheet.getRange(rowNumber, idxStatus + 1).setValue(estadoFinal);
         }
         if (idxAlmacenista !== -1 && !rowFormulas[idxAlmacenista]) {
           sheet.getRange(rowNumber, idxAlmacenista + 1).setValue(nombreAlmacenista || "");
         }
         if (idxObsAlmacen !== -1 && !rowFormulas[idxObsAlmacen]) {
-          sheet.getRange(rowNumber, idxObsAlmacen + 1).setValue(observacion || "");
+          sheet.getRange(rowNumber, idxObsAlmacen + 1).setValue(obsLinea);
         }
         if (idxFechaResp !== -1 && !rowFormulas[idxFechaResp]) {
           sheet.getRange(rowNumber, idxFechaResp + 1).setValue(fechaResp);
         }
 
+        itemLineCounter++;
         updatedRows++;
       }
     }
@@ -748,12 +798,12 @@ function actualizarEstadoSolicitud(idSolicitud, nuevoEstado, nombreAlmacenista, 
     return {
       success: true,
       idSolicitud: idSolicitud,
-      nuevoEstado: nuevoEstado,
+      nuevoEstado: estadoFinal,
       almacenista: nombreAlmacenista || "",
-      observacion: observacion || "",
+      observacion: resumenRespuestas.join(" | ") || observacion || "",
       fechaRespuesta: fechaResp,
       updatedRows: updatedRows,
-      message: "Solicitud " + idSolicitud + " actualizada a '" + nuevoEstado + "'."
+      message: "Solicitud " + idSolicitud + " respondida exitosamente."
     };
   } finally {
     lock.releaseLock();

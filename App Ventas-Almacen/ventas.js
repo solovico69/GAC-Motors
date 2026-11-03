@@ -53,7 +53,11 @@ const VentasState = {
   // Galería activa en el Modal de Vista Ampliada
   previewGallery: [],
   previewIndex: 0,
-  previewTitle: ""
+  previewTitle: "",
+
+  // Borradores en memoria de respuestas del Almacenista por línea (evita que el polling borre lo escrito)
+  warehouseDrafts: {}, // { "SOL-0001__0": "texto...", "SOL-0001__1": "texto..." }
+  lastAlmacenStructureHash: ""
 };
 
 // ==========================================
@@ -421,7 +425,7 @@ function bindUIEvents() {
     btn.addEventListener("click", () => {
       VentasState.almacenFilter = btn.getAttribute("data-almacen-filter") || "Pendiente";
       updateAlmacenFilterButtons();
-      renderAlmacenBoard();
+      renderAlmacenBoard(true);
     });
   });
 
@@ -1473,7 +1477,7 @@ async function fetchSolicitudes(isInitialLoad = false, manualNotify = false) {
     if (VentasState.selectedRole === "Vendedor") {
       renderMisSolicitudesSeller();
     } else if (VentasState.selectedRole === "Almacenista") {
-      renderAlmacenBoard();
+      renderAlmacenBoard(isInitialLoad || manualNotify);
     }
 
     if (manualNotify) {
@@ -1583,9 +1587,9 @@ function renderMisSolicitudesSeller() {
 
       let statusBadge =
         `<span class="px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-black uppercase">⏳ Pendiente en Almacén</span>`;
-      if (status === "Despachado") {
+      if (status === "Respondido" || status === "Despachado") {
         statusBadge =
-          `<span class="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase">✅ Despachado</span>`;
+          `<span class="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase">✅ ${escapeHtml(status)}</span>`;
       } else if (status === "No Procesar") {
         statusBadge =
           `<span class="px-3 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-black uppercase">⛔ No Procesar</span>`;
@@ -1598,7 +1602,7 @@ function renderMisSolicitudesSeller() {
       const itemsHtml = (sol.items || [])
         .map(
           (it) => `
-            <div class="py-2.5 px-3 rounded-xl bg-slate-950 border border-slate-800/80 text-xs space-y-1">
+            <div class="py-2.5 px-3 rounded-xl bg-slate-950 border border-slate-800/80 text-xs space-y-1.5">
               <div class="flex items-center justify-between gap-2">
                 <div class="min-w-0">
                   <span class="font-black text-slate-300">[${escapeHtml(it.SKU_Articulo)}]</span>
@@ -1612,8 +1616,15 @@ function renderMisSolicitudesSeller() {
               ${
                 it.Observacion_Vendedor
                   ? `<p class="text-[11px] text-blue-300 font-semibold pl-1">
-                      📝 Nota Vendedor: "${escapeHtml(it.Observacion_Vendedor)}"
+                      📝 Tu Nota: "${escapeHtml(it.Observacion_Vendedor)}"
                     </p>`
+                  : ""
+              }
+              ${
+                it.Observacion_Almacen
+                  ? `<div class="px-2.5 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-700/50 text-emerald-200 text-[11px] font-bold">
+                      💬 Respuesta Almacén: "${escapeHtml(it.Observacion_Almacen)}"
+                    </div>`
                   : ""
               }
             </div>
@@ -1621,22 +1632,23 @@ function renderMisSolicitudesSeller() {
         )
         .join("");
 
+      const hasPerItemResponses = (sol.items || []).some((it) => Boolean(it.Observacion_Almacen));
       const obsAlmacenTexto = sol.observacionAlmacen || sol.observacion || "";
       const responseBox =
         status !== "Pendiente" || obsAlmacenTexto || sol.almacenista
           ? `
             <div class="mt-3 p-3 rounded-xl border ${
-              status === "Despachado"
-                ? "bg-emerald-950/40 border-emerald-700/50 text-emerald-200"
-                : "bg-red-950/40 border-red-700/50 text-red-200"
+              status === "No Procesar"
+                ? "bg-red-950/40 border-red-700/50 text-red-200"
+                : "bg-emerald-950/40 border-emerald-700/50 text-emerald-200"
             } text-xs">
               <p class="font-extrabold">
-                👤 Atendido por: <span class="underline">${escapeHtml(sol.almacenista || "Almacén")}</span>
+                👤 Respondido por: <span class="underline">${escapeHtml(sol.almacenista || "Almacén")}</span>
                 ${sol.fechaRespuesta ? ` • <span class="opacity-80">${escapeHtml(sol.fechaRespuesta)}</span>` : ""}
               </p>
               ${
-                obsAlmacenTexto
-                  ? `<p class="mt-1 font-semibold">💬 Observación Almacén: "${escapeHtml(obsAlmacenTexto)}"</p>`
+                !hasPerItemResponses && obsAlmacenTexto
+                  ? `<p class="mt-1 font-semibold">💬 Respuesta Almacén: "${escapeHtml(obsAlmacenTexto)}"</p>`
                   : ""
               }
             </div>
@@ -1681,7 +1693,7 @@ function updateAlmacenFilterButtons() {
   });
 }
 
-function renderAlmacenBoard() {
+function renderAlmacenBoard(forceRender = false) {
   const board = document.getElementById("almacenBoardGrid");
   const countPendEl = document.getElementById("countAlmacenPendientes");
   const countAllEl = document.getElementById("countAlmacenTodas");
@@ -1711,11 +1723,43 @@ function renderAlmacenBoard() {
       ? allSolicitudes.filter((s) => (s.status || "Pendiente") === "Pendiente")
       : allSolicitudes;
 
+  // Firma estructural para saber si cambiaron las solicitudes o sus estados
+  const newStructureHash =
+    VentasState.almacenFilter +
+    "::" +
+    filtered
+      .map(
+        (s) =>
+          `${s.idSolicitud}:${s.status}:${s.prioridad}:${(s.items || []).length}:${s.fechaRespuesta || ""}`
+      )
+      .join("|");
+
+  // Si el almacenista está escribiendo activamente en un input del tablero y la lista de pedidos no cambió,
+  // NO reconstruimos el DOM durante el polling de 30s para no interrumpir su escritura.
+  const activeEl = document.activeElement;
+  const isTypingInBoard =
+    activeEl &&
+    board.contains(activeEl) &&
+    (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
+
+  if (!forceRender && isTypingInBoard && newStructureHash === VentasState.lastAlmacenStructureHash) {
+    return;
+  }
+
+  // Preservar el foco y posición del cursor si se requiere re-renderizar por una nueva solicitud entrante
+  const focusedDraftKey =
+    isTypingInBoard && activeEl.getAttribute("data-draft-key")
+      ? activeEl.getAttribute("data-draft-key")
+      : null;
+  const focusedSelectionStart = isTypingInBoard ? activeEl.selectionStart : null;
+
+  VentasState.lastAlmacenStructureHash = newStructureHash;
+
   if (filtered.length === 0) {
     board.innerHTML = `
       <div class="col-span-full bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center">
         <p class="text-4xl mb-2">✅</p>
-        <p class="text-lg font-black text-white">No hay solicitudes pendientes por despachar</p>
+        <p class="text-lg font-black text-white">No hay solicitudes pendientes por responder</p>
         <p class="text-xs text-slate-400 mt-1">El radar sigue activo cada 30s. Sonará una campana al ingresar un nuevo pedido.</p>
       </div>
     `;
@@ -1740,92 +1784,101 @@ function renderAlmacenBoard() {
         : `<span class="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-black uppercase tracking-wider">🔵 NORMAL</span>`;
 
       let statusTag = `<span class="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-black uppercase">⏳ Pendiente</span>`;
-      if (sol.status === "Despachado") {
-        statusTag = `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase">✅ Despachado</span>`;
+      if (sol.status === "Respondido" || sol.status === "Despachado") {
+        statusTag = `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase">✅ ${escapeHtml(sol.status)}</span>`;
       } else if (sol.status === "No Procesar") {
         statusTag = `<span class="px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-black uppercase">⛔ No Procesar</span>`;
       }
 
       const itemsListHtml = (sol.items || [])
-        .map(
-          (item) => `
-            <div class="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div class="space-y-1.5 min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <span class="px-2 py-0.5 rounded bg-slate-800 text-xs font-black text-white">
-                    SKU: ${escapeHtml(item.SKU_Articulo)}
+        .map((item, itemIdx) => {
+          const draftKey = `${sol.idSolicitud}__${itemIdx}`;
+          const savedDraft =
+            VentasState.warehouseDrafts[draftKey] !== undefined
+              ? VentasState.warehouseDrafts[draftKey]
+              : item.Observacion_Almacen || "";
+
+          return `
+            <div class="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 space-y-3">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="space-y-1.5 min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="px-2 py-0.5 rounded bg-slate-800 text-xs font-black text-white">
+                      SKU: ${escapeHtml(item.SKU_Articulo)}
+                    </span>
+                    <span class="px-2.5 py-0.5 rounded-md bg-red-600/20 border border-red-500/40 text-red-300 text-xs font-black">
+                      CANTIDAD: ${item.Cantidad}
+                    </span>
+                  </div>
+                  <p class="text-sm sm:text-base font-extrabold text-white leading-snug">
+                    ${escapeHtml(item.Descripcion_Repuesto)}
+                  </p>
+                  ${
+                    item.Observacion_Vendedor
+                      ? `<div class="px-2.5 py-1.5 rounded-xl bg-blue-950/70 border border-blue-700/60 text-blue-200 text-xs font-bold">
+                          📝 Nota del Vendedor: "${escapeHtml(item.Observacion_Vendedor)}"
+                        </div>`
+                      : ""
+                  }
+                </div>
+
+                <!-- UBICACIÓN FÍSICA EN GRANDE Y NEGRITA PARA RECOLECCIÓN INMEDIATA -->
+                <div class="shrink-0 bg-amber-500/15 border-2 border-amber-400 rounded-2xl px-4 py-2.5 text-center sm:text-right">
+                  <span class="block text-[10px] font-black uppercase tracking-widest text-amber-300">
+                    📍 UBICACIÓN FÍSICA
                   </span>
-                  <span class="px-2.5 py-0.5 rounded-md bg-red-600/20 border border-red-500/40 text-red-300 text-xs font-black">
-                    CANTIDAD: ${item.Cantidad}
+                  <span class="block text-lg sm:text-xl font-black text-amber-300 tracking-tight">
+                    ${escapeHtml(item.Ubicacion_Almacen || "SIN UBICACIÓN")}
                   </span>
                 </div>
-                <p class="text-sm sm:text-base font-extrabold text-white leading-snug">
-                  ${escapeHtml(item.Descripcion_Repuesto)}
-                </p>
-                ${
-                  item.Observacion_Vendedor
-                    ? `<div class="px-2.5 py-1.5 rounded-xl bg-blue-950/70 border border-blue-700/60 text-blue-200 text-xs font-bold">
-                        📝 Nota del Vendedor: "${escapeHtml(item.Observacion_Vendedor)}"
-                      </div>`
-                    : ""
-                }
               </div>
 
-              <!-- UBICACIÓN FÍSICA EN GRANDE Y NEGRITA PARA RECOLECCIÓN INMEDIATA -->
-              <div class="shrink-0 bg-amber-500/15 border-2 border-amber-400 rounded-2xl px-4 py-2.5 text-center sm:text-right">
-                <span class="block text-[10px] font-black uppercase tracking-widest text-amber-300">
-                  📍 UBICACIÓN FÍSICA
-                </span>
-                <span class="block text-lg sm:text-xl font-black text-amber-300 tracking-tight">
-                  ${escapeHtml(item.Ubicacion_Almacen || "SIN UBICACIÓN")}
-                </span>
-              </div>
+              <!-- RESPUESTA ESPECÍFICA DE ALMACÉN PARA ESTE ARTÍCULO / LÍNEA -->
+              ${
+                isPending
+                  ? `<div>
+                      <label class="block text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 mb-1">
+                        💬 Respuesta de Almacén para SKU ${escapeHtml(item.SKU_Articulo)}:
+                      </label>
+                      <input
+                        type="text"
+                        data-draft-key="${escapeHtml(draftKey)}"
+                        data-sol-id="${idSol}"
+                        data-item-idx="${itemIdx}"
+                        data-item-sku="${escapeHtml(item.SKU_Articulo)}"
+                        value="${escapeHtml(savedDraft)}"
+                        placeholder="Escribe la respuesta para este artículo (ej: Sí hay 5 unidades / Ubicado en E2 / Sin stock)..."
+                        class="warehouse-item-reply w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs sm:text-sm focus:outline-none focus:border-emerald-400 transition"
+                      />
+                    </div>`
+                  : item.Observacion_Almacen
+                  ? `<div class="px-3 py-2 rounded-xl bg-emerald-950/50 border border-emerald-700/50 text-emerald-200 text-xs font-bold">
+                      💬 Respuesta Almacén: "${escapeHtml(item.Observacion_Almacen)}"
+                    </div>`
+                  : ""
+              }
             </div>
-          `
-        )
+          `;
+        })
         .join("");
 
       const actionSectionHtml = isPending
         ? `
-          <div class="pt-3 border-t border-slate-800 space-y-3">
-            <div>
-              <label for="obs_${idSol}" class="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
-                Observaciones rápidas de Almacén (Opcional)
-              </label>
-              <input
-                type="text"
-                id="obs_${idSol}"
-                placeholder="Ej: Entregado en mostrador / Stock incompleto / Pieza dañada..."
-                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs sm:text-sm focus:outline-none focus:border-amber-400"
-              />
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                data-dispatch-id="${idSol}"
-                data-dispatch-state="Despachado"
-                class="btn-warehouse-action py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg transition flex items-center justify-center gap-1.5"
-              >
-                <span>✅ Despachar</span>
-              </button>
-
-              <button
-                type="button"
-                data-dispatch-id="${idSol}"
-                data-dispatch-state="No Procesar"
-                class="btn-warehouse-action py-3.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg transition flex items-center justify-center gap-1.5"
-              >
-                <span>⛔ No Procesar</span>
-              </button>
-            </div>
+          <div class="pt-3 border-t border-slate-800">
+            <button
+              type="button"
+              data-dispatch-id="${idSol}"
+              data-dispatch-state="Respondido"
+              class="btn-warehouse-action w-full py-3.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg transition flex items-center justify-center gap-2"
+            >
+              <span>✅ RESPONDER</span>
+            </button>
           </div>
         `
         : `
           <div class="pt-3 border-t border-slate-800 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-2">
             <span>
-              Procesado por: <strong class="text-white">${escapeHtml(sol.almacenista || "Almacén")}</strong>
-              ${sol.observacion ? ` • Nota: <em>"${escapeHtml(sol.observacion)}"</em>` : ""}
+              Respondido por: <strong class="text-white">${escapeHtml(sol.almacenista || "Almacén")}</strong>
             </span>
             <span class="text-slate-500">${escapeHtml(sol.fechaRespuesta || "")}</span>
           </div>
@@ -1849,7 +1902,7 @@ function renderAlmacenBoard() {
               </div>
             </div>
 
-            <!-- Lista de Repuestos y Ubicaciones -->
+            <!-- Lista de Repuestos, Ubicaciones y Respuestas por Línea -->
             <div class="space-y-2.5">
               ${itemsListHtml}
             </div>
@@ -1861,25 +1914,77 @@ function renderAlmacenBoard() {
     })
     .join("");
 
-  // Eventos para botones "Despachar" y "No Procesar"
+  // Guardar en tiempo real cada tecla que escriba el almacenista en los borradores por línea
+  board.querySelectorAll(".warehouse-item-reply").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      const key = input.getAttribute("data-draft-key");
+      if (key) {
+        VentasState.warehouseDrafts[key] = e.target.value;
+      }
+    });
+  });
+
+  // Restaurar foco y cursor si el almacenista estaba escribiendo cuando entró una solicitud nueva
+  if (focusedDraftKey) {
+    const restoredInput = board.querySelector(`[data-draft-key="${CSS.escape(focusedDraftKey)}"]`);
+    if (restoredInput) {
+      restoredInput.focus();
+      if (typeof focusedSelectionStart === "number") {
+        restoredInput.setSelectionRange(focusedSelectionStart, focusedSelectionStart);
+      }
+    }
+  }
+
+  // Evento para el botón único "✅ RESPONDER"
   board.querySelectorAll(".btn-warehouse-action").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const idSolicitud = btn.getAttribute("data-dispatch-id");
-      const nuevoEstado = btn.getAttribute("data-dispatch-state");
-      const obsInput = document.getElementById(`obs_${idSolicitud}`);
-      const observacion = obsInput ? obsInput.value.trim() : "";
+      const nuevoEstado = btn.getAttribute("data-dispatch-state") || "Respondido";
 
-      await handleWarehouseStatusUpdate(idSolicitud, nuevoEstado, observacion, btn);
+      const itemInputs = board.querySelectorAll(
+        `.warehouse-item-reply[data-sol-id="${CSS.escape(idSolicitud)}"]`
+      );
+      const respuestasPorItem = [];
+      const resumenGeneral = [];
+
+      itemInputs.forEach((inp) => {
+        const idx = parseInt(inp.getAttribute("data-item-idx"), 10) || 0;
+        const sku = inp.getAttribute("data-item-sku") || "";
+        const val = inp.value.trim();
+        respuestasPorItem.push({
+          index: idx,
+          sku: sku,
+          observacionAlmacen: val
+        });
+        if (val) {
+          resumenGeneral.push(sku ? `[${sku}] ${val}` : val);
+        }
+      });
+
+      const observacionResumen = resumenGeneral.join(" | ");
+      await handleWarehouseStatusUpdate(
+        idSolicitud,
+        nuevoEstado,
+        observacionResumen,
+        respuestasPorItem,
+        btn
+      );
     });
   });
 }
 
-async function handleWarehouseStatusUpdate(idSolicitud, nuevoEstado, observacion, buttonEl) {
+async function handleWarehouseStatusUpdate(
+  idSolicitud,
+  nuevoEstado,
+  observacion,
+  respuestasPorItem,
+  buttonEl
+) {
   if (!idSolicitud || !nuevoEstado) return;
 
   const originalHtml = buttonEl.innerHTML;
   buttonEl.disabled = true;
-  buttonEl.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Procesando...`;
+  buttonEl.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Enviando respuesta...`;
 
   try {
     const payload = {
@@ -1887,7 +1992,8 @@ async function handleWarehouseStatusUpdate(idSolicitud, nuevoEstado, observacion
       idSolicitud: idSolicitud,
       nuevoEstado: nuevoEstado,
       nombreAlmacenista: VentasState.selectedUser,
-      observacion: observacion
+      observacion: observacion,
+      respuestasPorItem: respuestasPorItem
     };
 
     const res = await fetch(VentasState.gasUrl, {
@@ -1897,10 +2003,17 @@ async function handleWarehouseStatusUpdate(idSolicitud, nuevoEstado, observacion
     const data = await res.json();
 
     if (data && data.success) {
-      showToast(`Solicitud #${idSolicitud} marcada como "${nuevoEstado}"`, "success");
-      await fetchSolicitudes(false);
+      // Limpiar borradores de esta solicitud ya respondida
+      Object.keys(VentasState.warehouseDrafts).forEach((k) => {
+        if (k.startsWith(`${idSolicitud}__`)) {
+          delete VentasState.warehouseDrafts[k];
+        }
+      });
+
+      showToast(`Solicitud #${idSolicitud} respondida exitosamente`, "success");
+      await fetchSolicitudes(false, true);
     } else {
-      showToast("Error al actualizar: " + (data.error || "Desconocido"), "error");
+      showToast("Error al responder: " + (data.error || "Desconocido"), "error");
       buttonEl.disabled = false;
       buttonEl.innerHTML = originalHtml;
     }
