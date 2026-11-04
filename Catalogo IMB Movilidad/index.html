@@ -1,0 +1,728 @@
+<!--
+  PROYECTO: Catálogo General IMB Movilidad
+  DESARROLLO & ARQUITECTURA: Victor Solorzano
+  ASISTENCIA TÉCNICA: OpenCode for Obsidian & Antigravity IDE
+  ROL: Portal Web y Aplicación Web Progresiva (PWA) de Consulta Pública de Repuestos
+-->
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <title>CATÁLOGO GENERAL IMB MOVILIDAD | Repuestos GAC, DFSK y Shineray</title>
+
+  <!-- SEO & PWA Meta -->
+  <meta
+    name="description"
+    content="Catálogo General Digital IMB Movilidad. Consulta en línea de repuestos, compatibilidad y disponibilidad para vehículos GAC, DFSK y Shineray."
+  />
+  <meta name="theme-color" content="#d31920" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Catálogo IMB" />
+
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png" />
+  <link rel="apple-touch-icon" href="./assets/icon-192.png" />
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            imb: {
+              red: "#d31920",
+              redDark: "#b31217",
+              dark: "#0b0f17",
+              card: "#111827",
+              border: "#1f2937"
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Estilos Complementarios -->
+  <link rel="stylesheet" href="./css/catalogo.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-imb-red selection:text-white">
+
+  <!-- ==========================================
+       NIVEL 1: CABECERA PRINCIPAL WEB (HEADER IMB MOVILIDAD)
+       ========================================== -->
+  <header class="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 shadow-xl">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-3">
+      <!-- Identidad Principal: Logo IMB-Movilidad + Título -->
+      <a
+        href="#topCatalogo"
+        id="btnHeaderReset"
+        class="flex items-center gap-3 min-w-0 group"
+        title="Volver al inicio del Catálogo General IMB Movilidad"
+      >
+        <div class="w-11 h-11 sm:w-13 sm:h-13 rounded-xl overflow-hidden shadow-md shadow-red-950/50 border border-red-500/40 shrink-0 bg-imb-red flex items-center justify-center">
+          <img
+            src="./assets/logo-imb.jpg"
+            alt="IMB Movilidad"
+            class="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+          />
+        </div>
+        <div class="truncate">
+          <div class="flex items-center gap-2">
+            <span class="inline-block px-2 py-0.5 rounded-md bg-red-500/15 border border-red-500/30 text-[10px] font-black uppercase tracking-widest text-red-400">
+              PORTAL OFICIAL DE CONSULTA
+            </span>
+          </div>
+          <h1 class="text-sm sm:text-xl font-black tracking-tight text-white truncate mt-0.5">
+            CATÁLOGO GENERAL IMB MOVILIDAD
+          </h1>
+        </div>
+      </a>
+
+      <!-- Acciones de Cabecera: Estado en Línea, Instalar App y Actualizar -->
+      <div class="flex items-center gap-2 shrink-0">
+        <!-- Indicador de sincronización en vivo -->
+        <div class="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 text-xs font-semibold text-slate-300">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Stock en línea</span>
+          <span class="text-slate-600">•</span>
+          <strong id="headerTotalCount" class="text-white font-extrabold">0</strong>
+          <span class="text-slate-400">ítems</span>
+        </div>
+
+        <!-- Botón Instalar PWA (aparece cuando el navegador lo permite) -->
+        <button
+          type="button"
+          id="btnInstallPwa"
+          class="hidden items-center gap-1.5 px-3 py-2 rounded-xl bg-imb-red hover:bg-imb-redDark text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-red-950/50 transition"
+          title="Instalar Catálogo IMB Movilidad en tu dispositivo"
+        >
+          <span>📲</span>
+          <span class="hidden sm:inline">Instalar App</span>
+        </button>
+
+        <!-- Botón Actualizar Catálogo -->
+        <button
+          type="button"
+          id="btnRefreshCatalog"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-100 transition"
+          title="Actualizar disponibilidad desde la hoja Repuestos"
+        >
+          <span id="refreshIcon">🔄</span>
+          <span class="hidden sm:inline">Actualizar</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ==========================================
+         NIVEL 2: SEGUNDA LÍNEA DE MARCAS OFICIALES (GAC • DFSK • SHINERAY)
+         ========================================== -->
+    <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-t border-slate-800/80">
+      <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+          <!-- Texto descriptivo de la vitrina de marcas -->
+          <div class="flex items-center justify-between md:justify-start gap-2">
+            <span class="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <span>🚘</span>
+              <span>Nuestras Marcas Oficiales (Toca un logo para filtrar):</span>
+            </span>
+            <span id="activeBrandIndicator" class="md:hidden text-[11px] font-bold text-red-400">
+              Todas
+            </span>
+          </div>
+
+          <!-- Cinta Interactiva de Logos Oficiales -->
+          <div class="grid grid-cols-4 gap-2 sm:gap-3 w-full md:w-auto">
+            <!-- Botón: Todas las Marcas (IMB Movilidad) -->
+            <button
+              type="button"
+              data-brand-card=""
+              class="brand-showcase-card brand-active flex items-center justify-center gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-slate-900 border-2 border-slate-700 text-left"
+              title="Mostrar repuestos de todas las marcas"
+            >
+              <img
+                src="./assets/logo-imb.jpg"
+                alt="Todas"
+                class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover shrink-0"
+              />
+              <div class="min-w-0 hidden sm:block">
+                <span class="block text-[10px] font-black uppercase tracking-wider text-red-400 leading-none">
+                  MULTIMARCA
+                </span>
+                <span class="block text-xs font-extrabold text-white truncate">
+                  Todas (<span id="countBrandAll">0</span>)
+                </span>
+              </div>
+              <span class="sm:hidden text-[11px] font-black text-white">Todas</span>
+            </button>
+
+            <!-- Botón Logo 1: GAC Motors -->
+            <button
+              type="button"
+              data-brand-card="GAC"
+              class="brand-showcase-card flex items-center justify-center gap-2 px-2 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white hover:bg-slate-100 border-2 border-slate-300 text-slate-900 shadow-sm"
+              title="Filtrar repuestos GAC Motors"
+            >
+              <img
+                src="./assets/logo-gac.png"
+                alt="GAC Motors"
+                class="h-6 sm:h-8 w-auto object-contain shrink-0"
+              />
+              <div class="hidden lg:block text-left border-l border-slate-200 pl-2">
+                <span class="block text-[10px] font-black uppercase tracking-wider text-slate-500 leading-none">
+                  GAC MOTORS
+                </span>
+                <span class="block text-xs font-extrabold text-slate-900">
+                  <span id="countBrandGAC">0</span> ítems
+                </span>
+              </div>
+            </button>
+
+            <!-- Botón Logo 2: DFSK -->
+            <button
+              type="button"
+              data-brand-card="DFSK"
+              class="brand-showcase-card flex items-center justify-center gap-2 px-2 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white hover:bg-slate-100 border-2 border-slate-300 text-slate-900 shadow-sm"
+              title="Filtrar repuestos DFSK"
+            >
+              <img
+                src="./assets/logo-dfsk.png"
+                alt="DFSK"
+                class="h-6 sm:h-8 w-auto object-contain shrink-0"
+              />
+              <div class="hidden lg:block text-left border-l border-slate-200 pl-2">
+                <span class="block text-[10px] font-black uppercase tracking-wider text-slate-500 leading-none">
+                  DFSK
+                </span>
+                <span class="block text-xs font-extrabold text-slate-900">
+                  <span id="countBrandDFSK">0</span> ítems
+                </span>
+              </div>
+            </button>
+
+            <!-- Botón Logo 3: SHINERAY -->
+            <button
+              type="button"
+              data-brand-card="SHINERAY"
+              class="brand-showcase-card flex items-center justify-center gap-2 px-2 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white hover:bg-slate-100 border-2 border-slate-300 text-slate-900 shadow-sm"
+              title="Filtrar repuestos Shineray"
+            >
+              <img
+                src="./assets/logo-shineray.png"
+                alt="Shineray"
+                class="h-6 sm:h-8 w-auto object-contain shrink-0"
+              />
+              <div class="hidden lg:block text-left border-l border-slate-200 pl-2">
+                <span class="block text-[10px] font-black uppercase tracking-wider text-slate-500 leading-none">
+                  SHINERAY
+                </span>
+                <span class="block text-xs font-extrabold text-slate-900">
+                  <span id="countBrandSHINERAY">0</span> ítems
+                </span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================
+       CONTENIDO PRINCIPAL DEL PORTAL DE CATÁLOGO
+       ========================================== -->
+  <main id="topCatalogo" class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-5 space-y-5">
+
+    <!-- PANEL DE BÚSQUEDA INTELIGENTE MULTI-CAMPO (ESTILO VENDEDOR, SOLO CONSULTA) -->
+    <section
+      aria-label="Buscador y filtros de repuestos"
+      class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-2xl space-y-3.5"
+    >
+      <!-- Fila 1: Barra de búsqueda libre + Switch Solo con Stock -->
+      <div class="flex flex-col sm:flex-row gap-2.5">
+        <div class="relative flex-1">
+          <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none">
+            🔍
+          </span>
+          <input
+            type="search"
+            id="multiSearchInput"
+            autocomplete="off"
+            placeholder='Busca por Descripción, Código SKU, N# de Parte, Marca, Modelo o Aplica A (ej: "Filtro GS3", "Pastilla DFSK", "Shineray")...'
+            class="w-full pl-11 pr-10 py-3.5 rounded-2xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 text-sm sm:text-base font-medium focus:outline-none focus:border-imb-red transition"
+          />
+          <button
+            type="button"
+            id="btnClearSearch"
+            class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs font-black px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 transition"
+            title="Borrar texto de búsqueda"
+          >
+            ✕
+          </button>
+        </div>
+
+        <!-- Filtro rápido: Solo con Stock (EXIST_VIRTUAL > 0) -->
+        <label
+          class="flex items-center justify-center sm:justify-start gap-2.5 px-4 py-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 cursor-pointer select-none text-xs sm:text-sm font-bold text-slate-200 shrink-0 transition"
+        >
+          <input
+            type="checkbox"
+            id="chkOnlyStock"
+            class="accent-red-600 w-4 h-4 rounded cursor-pointer"
+          />
+          <span>Solo con Stock disponible</span>
+        </label>
+      </div>
+
+      <!-- Fila 2: Selectores Específicos (MARCA, MODELO, APLICA A) + Botón Limpiar -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 pt-3 border-t border-slate-800/80">
+        <!-- Selector por MARCA -->
+        <div class="sm:col-span-1 lg:col-span-3">
+          <label
+            for="filterMarcaSelect"
+            class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1"
+          >
+            🏷️ Filtrar por MARCA
+          </label>
+          <select
+            id="filterMarcaSelect"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs sm:text-sm font-semibold focus:outline-none focus:border-imb-red transition"
+          >
+            <option value="">Todas las Marcas</option>
+          </select>
+        </div>
+
+        <!-- Selector por MODELO -->
+        <div class="sm:col-span-1 lg:col-span-4">
+          <label
+            for="filterModeloSelect"
+            class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1"
+          >
+            🚗 Filtrar por MODELO
+          </label>
+          <select
+            id="filterModeloSelect"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs sm:text-sm font-semibold focus:outline-none focus:border-imb-red transition"
+          >
+            <option value="">Todos los Modelos</option>
+          </select>
+        </div>
+
+        <!-- Selector por APLICA A (Compatibilidad) -->
+        <div class="sm:col-span-1 lg:col-span-3">
+          <label
+            for="filterAplicaASelect"
+            class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1"
+          >
+            🔧 Filtrar por APLICA A (Compatibilidad)
+          </label>
+          <select
+            id="filterAplicaASelect"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs sm:text-sm font-semibold focus:outline-none focus:border-imb-red transition"
+          >
+            <option value="">Todas las Aplicaciones</option>
+          </select>
+        </div>
+
+        <!-- Botón Limpiar Todos los Filtros -->
+        <div class="sm:col-span-1 lg:col-span-2 flex items-end">
+          <button
+            type="button"
+            id="btnResetAllFilters"
+            class="w-full py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-extrabold uppercase tracking-wider transition"
+          >
+            ✕ Limpiar Todo
+          </button>
+        </div>
+      </div>
+
+      <!-- Fila 3: Contador de Resultados + Chips Rápidos de Modelos/Marcas -->
+      <div class="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-slate-800/80 text-xs text-slate-400">
+        <div class="flex items-center gap-2">
+          <span>
+            Mostrando <strong id="catalogResultCount" class="text-white font-extrabold">0</strong> repuestos encontrados
+          </span>
+          <span id="activeFilterBadge" class="hidden px-2 py-0.5 rounded-md bg-red-500/20 border border-red-500/40 text-red-300 text-[11px] font-bold">
+            Filtro activo
+          </span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-[11px] text-slate-500">Búsqueda rápida:</span>
+          <button type="button" data-quick-filter="GS3" class="quick-filter-chip px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[11px] transition">GS3</button>
+          <button type="button" data-quick-filter="GS4" class="quick-filter-chip px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[11px] transition">GS4</button>
+          <button type="button" data-quick-filter="GS8" class="quick-filter-chip px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[11px] transition">GS8</button>
+          <button type="button" data-quick-filter="EMZOOM" class="quick-filter-chip px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[11px] transition">EMZOOM</button>
+          <button type="button" data-quick-filter="DFSK" class="quick-filter-chip px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[11px] transition">DFSK</button>
+          <button type="button" data-quick-filter="SHINERAY" class="quick-filter-chip px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[11px] transition">SHINERAY</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- GRID DE TARJETAS DE REPUESTOS -->
+    <section aria-label="Listado de repuestos">
+      <div
+        id="catalogGrid"
+        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+      >
+        <!-- Renderizado dinámicamente por catalogo.js -->
+      </div>
+
+      <!-- Botón "Cargar más resultados" cuando la búsqueda supera 120 ítems -->
+      <div id="loadMoreContainer" class="hidden mt-6 text-center">
+        <button
+          type="button"
+          id="btnLoadMore"
+          class="px-6 py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-extrabold text-xs sm:text-sm uppercase tracking-wider shadow-lg transition"
+        >
+          Mostrar más repuestos ↓
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==========================================
+       NIVEL 3: PIE DE PÁGINA WEB CORPORATIVO (FOOTER CON LOGOS IMB + MARCAS)
+       ========================================== -->
+  <footer class="mt-12 bg-slate-900 border-t border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+      <div class="flex flex-col lg:flex-row items-center justify-between gap-6 pb-8 border-b border-slate-800">
+        <!-- Identidad IMB Movilidad -->
+        <div class="flex flex-col sm:flex-row items-center text-center sm:text-left gap-4">
+          <img
+            src="./assets/logo-imb.jpg"
+            alt="Logo IMB Movilidad"
+            class="w-16 h-16 rounded-2xl object-cover shadow-lg border border-red-500/40"
+          />
+          <div>
+            <span class="text-[11px] font-black uppercase tracking-widest text-red-400">
+              PLATAFORMA DIGITAL DE REPUESTOS
+            </span>
+            <h2 class="text-lg sm:text-xl font-black text-white mt-0.5">
+              CATÁLOGO GENERAL IMB MOVILIDAD
+            </h2>
+            <p class="text-xs text-slate-400 max-w-md mt-1">
+              Consulta pública en tiempo real de repuestos originales, códigos de parte, fotografías y disponibilidad inmediata.
+            </p>
+          </div>
+        </div>
+
+        <!-- Insignias de las 3 Marcas Comercializadas en el Footer -->
+        <div class="flex flex-col items-center lg:items-end gap-2">
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+            Marcas respaldadas por IMB Movilidad
+          </span>
+          <div class="flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              data-footer-brand="GAC"
+              class="px-4 py-2 rounded-xl bg-white hover:scale-105 transition shadow flex items-center justify-center"
+              title="Ver repuestos GAC Motors"
+            >
+              <img src="./assets/logo-gac.png" alt="GAC Motors" class="h-8 w-auto object-contain" />
+            </button>
+            <button
+              type="button"
+              data-footer-brand="DFSK"
+              class="px-4 py-2 rounded-xl bg-white hover:scale-105 transition shadow flex items-center justify-center"
+              title="Ver repuestos DFSK"
+            >
+              <img src="./assets/logo-dfsk.png" alt="DFSK" class="h-8 w-auto object-contain" />
+            </button>
+            <button
+              type="button"
+              data-footer-brand="SHINERAY"
+              class="px-4 py-2 rounded-xl bg-white hover:scale-105 transition shadow flex items-center justify-center"
+              title="Ver repuestos Shineray"
+            >
+              <img src="./assets/logo-shineray.png" alt="Shineray" class="h-8 w-auto object-contain" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra inferior de derechos y ajuste técnico discreto -->
+      <div class="pt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+        <p>© IMB Movilidad — Catálogo General de Repuestos en Línea.</p>
+        <div class="flex items-center gap-4">
+          <button
+            type="button"
+            id="btnFooterTop"
+            class="text-slate-400 hover:text-white font-semibold transition"
+          >
+            ↑ Subir al buscador
+          </button>
+          <button
+            type="button"
+            id="btnOpenSettings"
+            class="text-slate-600 hover:text-slate-400 transition"
+            title="Configuración técnica de conexión"
+          >
+            ⚙️
+          </button>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==========================================
+       MODAL DE FICHA TÉCNICA COMPLETA Y GALERÍA DE FOTOS DEL REPUESTO
+       (SIN UBICACIÓN DE ALMACÉN)
+       ========================================== -->
+  <div
+    id="partDetailModal"
+    class="fixed inset-0 z-50 hidden bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div class="modal-animate-in relative w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl max-h-[92vh] flex flex-col">
+      <!-- Cabecera del Modal -->
+      <div class="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-800 bg-slate-950/60">
+        <div class="flex items-center gap-2.5 min-w-0 pr-2">
+          <img
+            src="./assets/logo-imb.jpg"
+            alt="IMB"
+            class="w-7 h-7 rounded-lg object-cover shrink-0"
+          />
+          <div class="min-w-0">
+            <span class="block text-[10px] font-black uppercase tracking-widest text-red-400">
+              FICHA TÉCNICA DE REPUESTO
+            </span>
+            <h3 id="modalPartTitle" class="text-sm sm:text-base font-extrabold text-white truncate">
+              Detalle del Repuesto
+            </h3>
+          </div>
+        </div>
+        <button
+          type="button"
+          id="btnClosePartModal"
+          class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold shrink-0 transition"
+          title="Cerrar ficha (Esc)"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- Cuerpo del Modal: Galería + Especificaciones -->
+      <div class="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-12">
+        <!-- Columna Izquierda: Visor Fotográfico y Miniaturas -->
+        <div class="lg:col-span-7 bg-slate-950 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-800">
+          <div class="relative p-4 flex items-center justify-center min-h-[260px] sm:min-h-[360px] flex-1">
+            <button
+              type="button"
+              id="btnPrevModalImg"
+              class="hidden absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-slate-900/90 hover:bg-imb-red border border-slate-700 text-white font-black shadow-lg flex items-center justify-center transition"
+              title="Fotografía anterior"
+            >
+              ◀
+            </button>
+
+            <img
+              id="modalMainImage"
+              src=""
+              alt="Fotografía del repuesto"
+              referrerpolicy="no-referrer"
+              class="max-h-[48vh] lg:max-h-[55vh] w-auto object-contain rounded-xl transition"
+            />
+
+            <button
+              type="button"
+              id="btnNextModalImg"
+              class="hidden absolute right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-slate-900/90 hover:bg-imb-red border border-slate-700 text-white font-black shadow-lg flex items-center justify-center transition"
+              title="Fotografía siguiente"
+            >
+              ▶
+            </button>
+
+            <span
+              id="modalPhotoCounter"
+              class="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-[11px] font-bold text-slate-300"
+            >
+              Fotografía 1 de 1
+            </span>
+          </div>
+
+          <!-- Tira de Miniaturas cuando hay múltiples fotos -->
+          <div
+            id="modalThumbnails"
+            class="hidden px-4 py-3 bg-slate-900/90 border-t border-slate-800 flex items-center justify-center gap-2 overflow-x-auto"
+          ></div>
+        </div>
+
+        <!-- Columna Derecha: Especificaciones del Repuesto (Sin Ubicación) -->
+        <div class="lg:col-span-5 p-5 sm:p-6 flex flex-col justify-between space-y-5">
+          <div class="space-y-4">
+            <!-- Estado de Stock (EXIST_VIRTUAL) y Logo de la Marca -->
+            <div class="flex items-center justify-between gap-2">
+              <span
+                id="modalStockBadge"
+                class="px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-black"
+              >
+                Disponible: 0
+              </span>
+
+              <div
+                id="modalBrandLogoBox"
+                class="px-3 py-1 rounded-xl bg-white flex items-center justify-center shadow-sm"
+              >
+                <img
+                  id="modalBrandLogoImg"
+                  src="./assets/logo-imb.jpg"
+                  alt="Marca"
+                  class="h-6 w-auto object-contain"
+                />
+              </div>
+            </div>
+
+            <!-- Nombre / Descripción Completa -->
+            <div>
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                Descripción del Repuesto
+              </span>
+              <h4
+                id="modalFullDescription"
+                class="text-base sm:text-lg font-black text-white leading-snug mt-0.5"
+              ></h4>
+            </div>
+
+            <!-- Caja Destacada de Código SKU con Botón Copiar -->
+            <div class="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <span class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                  Código de Artículo (SKU)
+                </span>
+                <p id="modalSkuCode" class="text-sm sm:text-base font-black text-white truncate mt-0.5">
+                  S/C
+                </p>
+              </div>
+              <button
+                type="button"
+                id="btnCopySku"
+                class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-200 shrink-0 transition"
+              >
+                📋 Copiar Código
+              </button>
+            </div>
+
+            <!-- Tabla de Especificaciones Técnicas -->
+            <div class="grid grid-cols-2 gap-2.5 text-xs">
+              <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3">
+                <span class="block text-[10px] font-bold uppercase text-slate-400">Marca</span>
+                <strong id="modalSpecMarca" class="text-white font-extrabold text-sm mt-0.5 block">-</strong>
+              </div>
+              <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3">
+                <span class="block text-[10px] font-bold uppercase text-slate-400">Modelo / Serie</span>
+                <strong id="modalSpecModelo" class="text-white font-extrabold text-sm mt-0.5 block">-</strong>
+              </div>
+              <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3">
+                <span class="block text-[10px] font-bold uppercase text-slate-400">N# de Parte</span>
+                <strong id="modalSpecNParte" class="text-white font-bold text-xs mt-0.5 block break-all">-</strong>
+              </div>
+              <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3">
+                <span class="block text-[10px] font-bold uppercase text-slate-400">Categoría</span>
+                <strong id="modalSpecCategoria" class="text-white font-bold text-xs mt-0.5 block">-</strong>
+              </div>
+            </div>
+
+            <!-- Compatibilidad (APLICA A) -->
+            <div class="bg-blue-950/30 border border-blue-800/50 rounded-2xl p-3.5">
+              <span class="block text-[10px] font-extrabold uppercase tracking-wider text-blue-300">
+                🔧 Compatibilidad / Aplica A
+              </span>
+              <p id="modalSpecAplicaA" class="text-xs sm:text-sm font-bold text-blue-100 mt-1">
+                Consulta general
+              </p>
+            </div>
+          </div>
+
+          <!-- Botón Cerrar en el pie de la ficha -->
+          <div class="pt-3 border-t border-slate-800">
+            <button
+              type="button"
+              id="btnClosePartModalBottom"
+              class="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs uppercase tracking-wider transition"
+            >
+              Cerrar Ficha
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL DE CONFIGURACIÓN DE URL APPS SCRIPT (DISCRETO)
+       ========================================== -->
+  <div
+    id="settingsModal"
+    class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+  >
+    <div class="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-black text-white">⚙️ Conexión de Datos IMB Movilidad</h3>
+        <button
+          type="button"
+          id="btnCloseSettings"
+          class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div class="space-y-2">
+        <label for="gasUrlInput" class="block text-xs font-bold uppercase tracking-wider text-slate-400">
+          URL del Web App de Google Apps Script (termina en /exec)
+        </label>
+        <input
+          type="url"
+          id="gasUrlInput"
+          placeholder="https://script.google.com/macros/s/.../exec"
+          class="w-full px-3.5 py-3 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs sm:text-sm focus:outline-none focus:border-imb-red"
+        />
+        <p class="text-[11px] text-slate-400">
+          Conectado en modo solo lectura a la pestaña <strong>Repuestos</strong> (`127o9T9u2r3BVVR-S9kq74FiGsxXCkifErOthQM0pv0k`).
+        </p>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button
+          type="button"
+          id="btnResetDefaultUrl"
+          class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300"
+        >
+          Restaurar Predeterminada
+        </button>
+        <button
+          type="button"
+          id="btnSaveSettings"
+          class="px-5 py-2.5 rounded-xl bg-imb-red hover:bg-imb-redDark text-xs font-black uppercase tracking-wider text-white"
+        >
+          Guardar y Sincronizar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       TOAST DE NOTIFICACIÓN RÁPIDA
+       ========================================== -->
+  <div
+    id="toastContainer"
+    class="fixed bottom-6 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+  ></div>
+
+  <!-- Lógica Principal ES6 -->
+  <script src="./catalogo.js"></script>
+</body>
+</html>
+

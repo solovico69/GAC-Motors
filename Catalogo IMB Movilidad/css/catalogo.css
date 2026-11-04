@@ -1,0 +1,76 @@
+/*
+ * PROYECTO: Catálogo General IMB Movilidad
+ * DESARROLLO & ARQUITECTURA: Victor Solorzano
+ * ASISTENCIA TÉCNICA: OpenCode for Obsidian & Antigravity IDE
+ * ROL: Estilos Corporativos del Portal Web y PWA Catálogo General IMB Movilidad
+ */
+
+:root {
+  --imb-red: #d31920;
+  --imb-red-dark: #b31217;
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Scrollbar corporativo */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(211, 25, 32, 0.8);
+}
+
+/* Efecto de tarjetas de marca interactivas */
+.brand-showcase-card {
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.brand-showcase-card:hover {
+  transform: translateY(-2px);
+}
+
+.brand-showcase-card.brand-active {
+  border-color: #d31920;
+  box-shadow: 0 0 0 2px rgba(211, 25, 32, 0.35), 0 10px 25px -5px rgba(211, 25, 32, 0.25);
+}
+
+/* Tarjeta de repuesto con micro-interacción estilo e-commerce */
+.part-card {
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.part-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px -10px rgba(0, 0, 0, 0.65);
+}
+
+/* Modal entrada suave */
+@keyframes modalFadeScale {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-animate-in {
+  animation: modalFadeScale 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+

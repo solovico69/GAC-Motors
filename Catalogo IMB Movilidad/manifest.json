@@ -1,0 +1,25 @@
+{
+  "name": "Catálogo General IMB Movilidad",
+  "short_name": "Catálogo IMB",
+  "description": "Catálogo General Digital de Repuestos Originales y Multimarca (GAC, DFSK, Shineray) - IMB Movilidad",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0f17",
+  "theme_color": "#d31920",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
