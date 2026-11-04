@@ -164,7 +164,7 @@ function findColumnIndex(headers, possibleNames) {
 
 /**
  * 1. getUsuarios()
- * Lee las columnas "Vendedores" y "Almacenistas" desde la pestaña Base_Datos.
+ * Lee las columnas "Vendedores", "Almacenistas" y "CONTRASEÑAS" desde la pestaña Base_Datos.
  * REGLA DE LECTURA: Solo lectura de valores, jamás modifica Base_Datos.
  */
 function getUsuarios() {
@@ -182,7 +182,11 @@ function getUsuarios() {
     return {
       success: true,
       vendedores: [],
-      almacenistas: []
+      almacenistas: [],
+      passwords: {
+        Vendedor: "ventas123",
+        Almacenista: "almacen123"
+      }
     };
   }
 
@@ -199,9 +203,19 @@ function getUsuarios() {
     "ALMACEN",
     "DESPACHADORES"
   ]);
+  var colContrasenas = findColumnIndex(headers, [
+    "CONTRASEÑAS",
+    "CONTRASENAS",
+    "CONTRASEÑA",
+    "CONTRASENA",
+    "CLAVES",
+    "CLAVE",
+    "PASSWORD"
+  ]);
 
   var vendedoresSet = {};
   var almacenistasSet = {};
+  var contrasenasList = [];
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
@@ -219,12 +233,45 @@ function getUsuarios() {
         almacenistasSet[alm] = true;
       }
     }
+
+    if (colContrasenas !== -1 && row[colContrasenas] !== undefined && row[colContrasenas] !== null) {
+      var pass = row[colContrasenas].toString().trim();
+      if (pass !== "" && contrasenasList.indexOf(pass) === -1) {
+        contrasenasList.push(pass);
+      }
+    }
+  }
+
+  // Identificar contraseña para Vendedores y Almacenistas desde la columna CONTRASEÑAS
+  var passVendedor = "ventas123";
+  var passAlmacenista = "almacen123";
+
+  if (contrasenasList.length > 0) {
+    // Buscar si alguna contiene explícitamente "venta" o "almacen", o asignar por orden (fila 1 = Vendedor, fila 2 = Almacenista)
+    var foundVenta = "";
+    var foundAlmacen = "";
+    for (var p = 0; p < contrasenasList.length; p++) {
+      var lowerP = contrasenasList[p].toLowerCase();
+      if (!foundVenta && lowerP.indexOf("venta") !== -1) {
+        foundVenta = contrasenasList[p];
+      } else if (!foundAlmacen && lowerP.indexOf("almacen") !== -1) {
+        foundAlmacen = contrasenasList[p];
+      }
+    }
+
+    passVendedor = foundVenta || contrasenasList[0] || "ventas123";
+    passAlmacenista = foundAlmacen || (contrasenasList.length > 1 ? contrasenasList[1] : "almacen123");
   }
 
   return {
     success: true,
     vendedores: Object.keys(vendedoresSet),
-    almacenistas: Object.keys(almacenistasSet)
+    almacenistas: Object.keys(almacenistasSet),
+    passwords: {
+      Vendedor: passVendedor,
+      Almacenista: passAlmacenista,
+      lista: contrasenasList
+    }
   };
 }
 

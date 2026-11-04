@@ -180,7 +180,7 @@
           ¿Eres Vendedor o Almacenista?
         </h2>
         <p class="text-xs sm:text-sm text-slate-400 mt-1.5">
-          Selecciona tu perfil y tu nombre para ingresar directo sin clave
+          Selecciona tu perfil, tu nombre e ingresa la contraseña de tu área
         </p>
       </div>
 
@@ -207,7 +207,7 @@
         </button>
       </div>
 
-      <!-- Selector Desplegable Dinámico de Nombre -->
+      <!-- Selector Desplegable Dinámico de Nombre + Contraseña -->
       <div id="userDropdownContainer" class="hidden space-y-4 pt-2 border-t border-slate-800">
         <div>
           <div class="flex items-center justify-between mb-1.5">
@@ -229,6 +229,33 @@
             <option value="">-- Selecciona tu nombre --</option>
           </select>
           <p id="usersLoadingHint" class="text-xs text-slate-400 mt-1.5"></p>
+        </div>
+
+        <!-- Campo de Contraseña por Rol -->
+        <div>
+          <label for="rolePasswordInput" id="rolePasswordLabel" class="block text-xs font-extrabold uppercase tracking-wider text-slate-300 mb-1.5">
+            🔒 Contraseña de Acceso
+          </label>
+          <div class="relative">
+            <input
+              type="password"
+              id="rolePasswordInput"
+              autocomplete="current-password"
+              placeholder="Ingresa la contraseña de tu perfil..."
+              class="w-full pl-4 pr-12 py-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-semibold text-base focus:outline-none focus:border-red-500 transition"
+            />
+            <button
+              type="button"
+              id="btnTogglePasswordView"
+              class="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition"
+              title="Mostrar / Ocultar contraseña"
+            >
+              👁️
+            </button>
+          </div>
+          <p id="rolePasswordError" class="hidden text-xs font-bold text-red-400 mt-1.5">
+            ❌ Contraseña incorrecta para el perfil seleccionado.
+          </p>
         </div>
 
         <button

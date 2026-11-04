@@ -23,15 +23,20 @@ const VentasState = {
   audioCtx: null,
   deferredInstallPrompt: null,
 
-  // Usuarios cargados desde Base_Datos
+  // Usuarios y Contraseñas cargados desde Base_Datos
   usuarios: {
     vendedores: [],
-    almacenistas: []
+    almacenistas: [],
+    passwords: {
+      Vendedor: "ventas123",
+      Almacenista: "almacen123"
+    }
   },
 
-  // Sesión actual (sin clave)
+  // Sesión actual autenticada
   selectedRole: localStorage.getItem("gac_ventas_role") || "", // "Vendedor" | "Almacenista"
   selectedUser: localStorage.getItem("gac_ventas_user") || "",
+  isAuthenticated: sessionStorage.getItem("gac_ventas_auth") === "true",
 
   // Catálogo de Repuestos
   catalog: [],
@@ -68,10 +73,12 @@ document.addEventListener("DOMContentLoaded", () => {
   bindUIEvents();
   updateSoundButtonUI();
 
-  // Cargar lista de usuarios desde Base_Datos
+  // Cargar lista de usuarios y contraseñas desde Base_Datos
   fetchUsuarios().then(() => {
-    if (VentasState.selectedRole && VentasState.selectedUser) {
+    if (VentasState.selectedRole && VentasState.selectedUser && VentasState.isAuthenticated) {
       enterActiveRoleModule();
+    } else if (VentasState.selectedRole) {
+      selectRoleOption(VentasState.selectedRole);
     }
   });
 });
@@ -283,22 +290,61 @@ function bindUIEvents() {
     fetchUsuarios(true);
   });
 
-  document.getElementById("userSelectDropdown")?.addEventListener("change", (e) => {
-    const val = e.target.value.trim();
-    const btnEnter = document.getElementById("btnEnterApp");
-    if (btnEnter) btnEnter.disabled = !val;
+  document.getElementById("userSelectDropdown")?.addEventListener("change", () => {
+    updateLoginButtonState();
+  });
+
+  const pwdInput = document.getElementById("rolePasswordInput");
+  pwdInput?.addEventListener("input", () => {
+    document.getElementById("rolePasswordError")?.classList.add("hidden");
+    updateLoginButtonState();
+  });
+
+  pwdInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      document.getElementById("btnEnterApp")?.click();
+    }
+  });
+
+  document.getElementById("btnTogglePasswordView")?.addEventListener("click", () => {
+    if (!pwdInput) return;
+    const isPwd = pwdInput.type === "password";
+    pwdInput.type = isPwd ? "text" : "password";
   });
 
   document.getElementById("btnEnterApp")?.addEventListener("click", () => {
     getAudioContext();
     const userVal = document.getElementById("userSelectDropdown")?.value.trim();
+    const passVal = (document.getElementById("rolePasswordInput")?.value || "").trim();
+    const errEl = document.getElementById("rolePasswordError");
+
     if (!VentasState.selectedRole || !userVal) {
       showToast("Selecciona tu rol y tu nombre para continuar", "error");
       return;
     }
+
+    const expectedPass =
+      VentasState.selectedRole === "Vendedor"
+        ? VentasState.usuarios.passwords.Vendedor || "ventas123"
+        : VentasState.usuarios.passwords.Almacenista || "almacen123";
+
+    if (passVal !== expectedPass) {
+      if (errEl) {
+        errEl.textContent = `❌ Contraseña incorrecta para el perfil de ${VentasState.selectedRole}.`;
+        errEl.classList.remove("hidden");
+      }
+      showToast("Contraseña incorrecta", "error");
+      return;
+    }
+
+    if (errEl) errEl.classList.add("hidden");
     VentasState.selectedUser = userVal;
+    VentasState.isAuthenticated = true;
     localStorage.setItem("gac_ventas_role", VentasState.selectedRole);
     localStorage.setItem("gac_ventas_user", VentasState.selectedUser);
+    sessionStorage.setItem("gac_ventas_auth", "true");
+    if (pwdInput) pwdInput.value = "";
     enterActiveRoleModule();
   });
 
@@ -306,6 +352,10 @@ function bindUIEvents() {
   document.getElementById("btnSwitchUser")?.addEventListener("click", () => {
     stopPolling();
     VentasState.initialSnapshotLoaded = false;
+    VentasState.isAuthenticated = false;
+    sessionStorage.removeItem("gac_ventas_auth");
+    if (pwdInput) pwdInput.value = "";
+    document.getElementById("rolePasswordError")?.classList.add("hidden");
     document.getElementById("activeSessionBadge")?.classList.add("hidden");
     document.getElementById("ventasModuleView")?.classList.add("hidden");
     document.getElementById("almacenModuleView")?.classList.add("hidden");
@@ -493,6 +543,10 @@ async function fetchUsuarios(showNotification = false) {
     if (data && data.success) {
       VentasState.usuarios.vendedores = Array.isArray(data.vendedores) ? data.vendedores : [];
       VentasState.usuarios.almacenistas = Array.isArray(data.almacenistas) ? data.almacenistas : [];
+      if (data.passwords) {
+        VentasState.usuarios.passwords.Vendedor = data.passwords.Vendedor || "ventas123";
+        VentasState.usuarios.passwords.Almacenista = data.passwords.Almacenista || "almacen123";
+      }
 
       if (hint) {
         hint.textContent = `✅ Personal sincronizado (${VentasState.usuarios.vendedores.length} vendedores, ${VentasState.usuarios.almacenistas.length} almacenistas).`;
@@ -518,6 +572,15 @@ async function fetchUsuarios(showNotification = false) {
   }
 }
 
+function updateLoginButtonState() {
+  const userVal = (document.getElementById("userSelectDropdown")?.value || "").trim();
+  const passVal = (document.getElementById("rolePasswordInput")?.value || "").trim();
+  const btnEnter = document.getElementById("btnEnterApp");
+  if (btnEnter) {
+    btnEnter.disabled = !(userVal && passVal);
+  }
+}
+
 function selectRoleOption(role) {
   VentasState.selectedRole = role;
 
@@ -525,6 +588,12 @@ function selectRoleOption(role) {
   const btnAlm = document.getElementById("btnSelectRoleAlmacenista");
   const container = document.getElementById("userDropdownContainer");
   const label = document.getElementById("userSelectLabel");
+  const passLabel = document.getElementById("rolePasswordLabel");
+  const passInput = document.getElementById("rolePasswordInput");
+  const passError = document.getElementById("rolePasswordError");
+
+  if (passError) passError.classList.add("hidden");
+  if (passInput) passInput.value = "";
 
   if (role === "Vendedor") {
     btnVend.className =
@@ -532,12 +601,14 @@ function selectRoleOption(role) {
     btnAlm.className =
       "group relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-slate-700 bg-slate-800/60 hover:border-amber-500 transition text-center";
     if (label) label.textContent = "Selecciona tu nombre de Vendedor (Base_Datos)";
+    if (passLabel) passLabel.textContent = "🔒 Contraseña de Vendedores";
   } else {
     btnAlm.className =
       "group relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-amber-500 bg-amber-950/30 text-center shadow-lg shadow-amber-950/40 transition";
     btnVend.className =
       "group relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-slate-700 bg-slate-800/60 hover:border-red-500 transition text-center";
     if (label) label.textContent = "Selecciona tu nombre de Almacenista (Base_Datos)";
+    if (passLabel) passLabel.textContent = "🔒 Contraseña de Almacenistas";
   }
 
   container?.classList.remove("hidden");
@@ -546,7 +617,6 @@ function selectRoleOption(role) {
 
 function populateRoleUsersDropdown(role) {
   const select = document.getElementById("userSelectDropdown");
-  const btnEnter = document.getElementById("btnEnterApp");
   if (!select) return;
 
   const list =
@@ -564,9 +634,7 @@ function populateRoleUsersDropdown(role) {
     select.appendChild(opt);
   });
 
-  if (btnEnter) {
-    btnEnter.disabled = !select.value;
-  }
+  updateLoginButtonState();
 }
 
 function enterActiveRoleModule() {
